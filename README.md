@@ -1,6 +1,6 @@
 # Welcome to My Coding Journey 🚀
 
-> 本项目在 Gitee 与 GitHub 同步托管，您可以在下方点击以选择访问速度更快的平台
+> 本项目在 **Gitee** 与 **GitHub** **同步托管**，您可以在下方**点击**以选择访问速度更快的平台
 >
 > <p>
 >    <a href="https://gitee.com/AvexVertex/coding-journey"><img src="https://img.shields.io/badge/Gitee-码云-C71D23?logo=gitee" alt="Gitee"></a>   
