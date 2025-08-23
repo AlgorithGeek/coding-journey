@@ -1,8 +1,5 @@
 # Welcome to My Coding Journey 🚀
 
-> “逆流河上万仙退，爱情不敌坚持泪” 
-> "Against the flow of adversity, even immortals retreat; for love is no match for the tears of unwavering persistence."
-
 - 你好，我是 **AvexVertex** 👋
 
 
@@ -48,14 +45,14 @@
     <img src="https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white" alt="Git">
     <img src="https://img.shields.io/badge/Subversion-809CC9?style=for-the-badge&logo=subversion&logoColor=white" alt="Subversion">
   </p>
-
+  
   
 
 ---
 
-## 🌟 致访客 (To Visitors) 
+## 🌟 致访客
 
 - 这并非一份完美的教程，而是一份鲜活的成长记录。
-  - 其中难免存在错误或疏漏，欢迎通过 Issue 或 Pull Request 提出你的建议。
+  - 其中难免存在错误或疏漏，**欢迎通过 Issue 或 Pull Request 提出你的建议**。
 
 -  让我们一起学习，共同进步！
