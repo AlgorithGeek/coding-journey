@@ -26,7 +26,7 @@
 
 ## ✨ 我的技术栈
 
-- 这里是我正在学习或使用的技术，它会随着我的旅程不断更新
+- 这里是我学过或正在学习的技术，它会随着我的旅程不断更新
 
   <p align="left">
     <img src="https://img.shields.io/badge/Java-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white" alt="Java">
