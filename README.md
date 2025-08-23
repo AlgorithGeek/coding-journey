@@ -1,17 +1,14 @@
 # Welcome to My Coding Journey 🚀
 
-- 你好，我是 **AvexVertex** 👋
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+- 你好，我是 **AvexVertex** 👋
 
 - 这个仓库将是我作为一名开发者成长的个人编年史。我将在这里记录下我学习路上遇到的每一处风景、攻克的每一个难关，以及收获的每一份感悟
 
-
 - 这不仅仅是一个技术笔记仓库，更是我思考、实践与成长的见证
 
-
 ---
-
-
 
 ## 🌱 关于这个仓库
 
@@ -25,10 +22,7 @@
 
   * **📔 个人日记**: 记录日常的学习进度、遇到的 Bug 和一些灵光一闪的想法。
 
-
 ---
-
-
 
 ## ✨ 我的技术栈
 
@@ -45,14 +39,26 @@
     <img src="https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white" alt="Git">
     <img src="https://img.shields.io/badge/Subversion-809CC9?style=for-the-badge&logo=subversion&logoColor=white" alt="Subversion">
   </p>
-  
-  
+
+---
+
+## 📄 开源许可
+
+- 本仓库采用 **[MIT](LICENSE)** 开源许可证。
+
+
+- 简单来说，这意味着你可以**随意使用这里的任何内容**。
+  - 欢迎你通过 **Fork** 的方式 创建你自己的副本进行修改和使用。
+  - 如果你**发现了错误或有更好的建议**，也**非常欢迎通过 Issue 或 Pull Request向我提出**，让我们共同完善这个仓库！
 
 ---
 
 ## 🌟 致访客
 
 - 这并非一份完美的教程，而是一份鲜活的成长记录。
-  - 其中难免存在错误或疏漏，**欢迎通过 Issue 或 Pull Request 提出你的建议**。
+  - 其中难免存在错误或疏漏，**真诚地欢迎大家**：
+    - **🤔 提出问题或想法**：**通过 [Issue](https://gitee.com/AvexVertex/coding-journey/issues) 与我交流**。
+    - **✍️ 帮助改进内容**：**通过 [Pull Request](https://gitee.com/AvexVertex/coding-journey/pulls) 提交你的修订**
+  
+- 让我们一起学习，共同进步！
 
--  让我们一起学习，共同进步！
