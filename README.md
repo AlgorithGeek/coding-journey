@@ -1,12 +1,12 @@
 # Welcome to My Coding Journey 🚀
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
-- 你好，我是 **AvexVertex** 👋
-
-- 这个仓库将是我作为一名开发者成长的个人编年史。我将在这里记录下我学习路上遇到的每一处风景、攻克的每一个难关，以及收获的每一份感悟
-
-- 这不仅仅是一个技术笔记仓库，更是我思考、实践与成长的见证
+> 本项目在 Gitee 与 GitHub 同步托管，您可以选择访问速度更快的平台
+>
+> <p>
+>    <a href="https://gitee.com/AvexVertex/coding-journey"><img src="https://img.shields.io/badge/Gitee-码云-C71D23?logo=gitee" alt="Gitee"></a>   
+>     <a href="https://github.com/AlgorithGeek/coding-journey">
+>     <img src="https://img.shields.io/badge/GitHub-仓库-181717?logo=github" alt="GitHub"></a>   
+> </p>
 
 ---
 
