@@ -384,7 +384,7 @@
 
   - **方式一：利用字段名自动匹配** (推荐)
 
-    ```
+    ```java
     @Service
     public class CustomerService {
         // 字段名 "emailNotification" 直接对应了 Bean 的名字，无需其他注解
@@ -399,7 +399,7 @@
 
   - **方式二：使用 `name` 属性明确指定**
 
-    ```
+    ```java
     @Service
     public class OrderService {
         // 使用 name 属性明确指定要注入 "smsNotification" 这个 Bean
@@ -1080,7 +1080,7 @@
 
 
 
-## 输入时间格式化注解@DateTimeFormat
+## 5. 请求时间格式化注解@DateTimeFormat
 
 - `@DateTimeFormat` 是 Spring 框架提供的一个注解，其核心作用是**解决“入参”问题**：它负责将前端 HTTP 请求中传来的**字符串**，精确地转换成后端 Java 代码中的**日期时间对象**（如 `Date`, `LocalDate`, `LocalDateTime` 等）。
 
@@ -1207,7 +1207,7 @@
 
 
 
-## 5. 高级请求与响应封装
+## 5. 请求与响应封装
 
 ### `ResponseEntity<T>`：精细控制 HTTP 响应 (服务器端常用)
 
@@ -1361,7 +1361,7 @@
 
 - **全局配置方式 (更推荐)**: 虽然 `@CrossOrigin` 注解很方便，但在大型项目中，更好的做法是进行**全局统一配置**，而不是在每个 Controller 上都写一遍。这可以通过实现 `WebMvcConfigurer` 接口来完成。
 
-  ```
+  ```java
   @Configuration
   public class WebConfig implements WebMvcConfigurer {
       @Override
@@ -1441,113 +1441,275 @@
 
 
 
-## 3. 事务管理核心注解：`@Transactional`
+## 3. 事务管理
 
-- 当 MyBatis 与 SpringBoot 集成后，我们不再需要关心 `SqlSession` 的开关和事务的手动提交回滚。Spring 通过 **AOP (面向切面编程)** 的方式，提供了一套强大的**声明式事务管理**机制
+- 在 Spring Boot 与 MyBatis（或 JPA）集成后，我们无需再手动管理 `SqlSession` 的开关及事务的提交与回滚。
+  - Spring 框架通过 **AOP (面向切面编程)** 为我们提供了一套强大且便捷的**声明式事务管理**机制。其核心就是 `@Transactional` 注解
 
-#### 注解`@Transactional`
+### 3.1 `@Transactional` 注解
 
-- 我们只需要在业务方法上添加一个注解——`@Transactional`，Spring 就会自动为这个方法生成一个代理，在方法执行前开启事务，在方法成功结束后提交事务，在方法抛出异常时回滚事务。
+#### 基本
+
+- `@Transactional` 是 Spring 声明式事务的基石。当我们将此注解应用于一个 public 方法时，Spring AOP 会为该类生成一个代理对象。当调用这个方法时，实际执行的是代理对象的逻辑：
+  1. **事务开启**：在目标方法执行前，代理对象会开启一个数据库事务。
+  2. **业务执行**：执行目标方法中的业务代码。
+  3. **事务提交/回滚**：
+     - 如果方法正常执行完毕（没有抛出异常），代理对象会**提交**事务。
+     - 如果方法抛出 **`RuntimeException`** 或 **`Error`**，代理对象会**回滚**事务。
+     - 如果方法抛出**受检异常 (Checked Exception)**，默认**不回滚**事务。
+
+- 事务回滚影响的是**数据库操作**，它会撤销已经执行的 SQL 语句，别的不怎么影响，当然在这范围内的所有SQL语句都会回滚！
+
+#### 基础代码示例
+
+```java
+@Service
+public class UserServiceImpl implements UserService {
+
+    @Autowired
+    private UserMapper userMapper;
+
+    // 声明此方法需要事务管理
+    @Transactional
+    public void transferMoney(Long fromId, Long toId, BigDecimal amount) {
+        // 1. 扣款
+        userMapper.decreaseBalance(fromId, amount);
+
+        // 模拟一个运行时异常
+        if (true) {
+            throw new RuntimeException("数据库连接中断，转账失败！");
+        }
+
+        // 2. 存款 (这行代码不会被执行)
+        userMapper.increaseBalance(toId, amount);
+    }
+}
+```
+
+在这个例子中，由于 `decreaseBalance` 操作后抛出了 `RuntimeException`，Spring 的事务管理器会捕获它并自动执行回滚。因此，`decreaseBalance` 对数据库的修改将被撤销，保证了账户资金的一致性。
+
+
+
+### 3.2 核心属性详解
+
+- `@Transactional` 注解提供了丰富的属性，以满足各种复杂的业务场景
+
+#### 1. 事务传播行为属性
+
+##### 什么是事务传播？
+
+- 在复杂的业务中，一个服务方法（比如 `serviceA.methodA()`）的执行过程中，常常会调用另一个服务方法（`serviceB.methodB()`）。如果这两个方法都配置了事务，那么 `methodB` 的事务应该如何与 `methodA` 的事务协同工作呢？
+  - 是应该加入 `methodA` 已有的事务，还是开启一个自己的新事务？或者是非事务执行？
+
+- **事务传播行为**就是用来定义和控制这种场景下事务如何传递、交互的规则
+
+  - **事务传播行为**通过**`@Transactional`中的`propagation`**属性定义
+
+  - 示例
+
+    ```java
+    @Transactional(propagation = Propagation.REQUIRES_NEW)  
+    ```
+
+    
+
+##### 七种事务传播行为属性
+
+###### 默认与最常用: `REQUIRED`
+
+- **定义**: 如果当前存在一个事务，则加入该事务；如果当前没有事务，则创建一个新事务。
+- **解读**: 这是 Spring **默认**的传播行为，也是最常用的一种。它保证了方法总是在一个事务内执行。外部方法和内部方法在同一个事务中，要么一起成功提交，要么一起失败回滚。
+- **适用场景**: 绝大多数需要数据库事务的业务场景，如经典的转账操作，`addMoney()` 和 `reduceMoney()` 必须在同一个事务中。
+
+
+
+###### 创建独立事务: `REQUIRES_NEW`
+
+- **定义**: **无论当前是否存在事务，总是创建一个全新的、独立的事务**。如果外部已存在事务，则将外部事务**挂起**，直到新事务执行完毕
+
+  > 这个属性指定的是自身的行为，不是它内部调用的别的方法等的行为，内部的别的方法等使用的规则是它们自己的propagation属性定义的行为
+
+- **解读**: `REQUIRES_NEW` 创建的事务是一个完全独立的单元，它有自己的隔离级别、锁和生命周期。它的提交或回滚**不会**影响到外部事务
+
+- **适用场景**:
+
+  - **日志记录**: 主业务（如创建订单）无论成功与否，都需要记录一条操作日志到数据库。日志记录操作就可以设置为 `REQUIRES_NEW`，这样即使订单创建失败回滚，日志也能成功保存。
+  - **独立任务**: 在一个复杂的业务流程中，某个子任务需要独立提交，不受主流程失败的影响。
+
+
+
+###### 其他传播行为
+
+- **`NESTED`**:如果当前存在事务，则在一个**嵌套事务**中执行。如果当前没有事务，其行为等同于 `REQUIRED`。
+- **`SUPPORTS`**: 如果当前存在事务，则加入该事务；如果当前没有事务，则以**非事务**的方式继续运行。主要用于查询或只读操作。
+- **`NOT_SUPPORTED`**: 以**非事务**方式运行，如果当前存在事务，则将当前事务挂起。
+- **`MANDATORY`**: 强制要求当前**必须存在**一个事务，否则直接抛出异常。
+- **`NEVER`**: 强制要求当前**不能存在**事务，否则直接抛出异常。
+
+
+
+#### 2. 事务隔离级别 (`isolation`)
+
+定义了多个并发事务之间数据的可见性。隔离级别越高，数据一致性越好，但并发性能越差。
+
+- **并发事务可能导致的问题**：
+  1. **脏读 (Dirty Read)**: 一个事务读取到另一个事务**未提交**的数据。
+  2. **不可重复读 (Non-repeatable Read)**: 同一事务内，多次读取**同一行**数据，结果不一致（因为期间被其他事务修改并提交）。
+  3. **幻读 (Phantom Read)**: 同一事务内，多次执行**范围查询**，返回的记录数不一致（因为期间被其他事务插入或删除）。
+- **四种标准隔离级别**：
+  - `READ_UNCOMMITTED` (读未提交): 允许以上所有问题，性能最好，基本不用。
+  - `READ_COMMITTED` (读已提交): **解决了脏读**。大多数数据库（如 Oracle, SQL Server）的默认级别。
+  - `REPEATABLE_READ` (可重复读): **解决了脏读和不可重复读**。MySQL InnoDB 引擎的默认级别。InnoDB 通过 MVCC 在一定程度上解决了幻读。
+  - `SERIALIZABLE` (可串行化): **解决所有问题**。通过加锁强制事务串行执行，性能最差。
+- **设置示例**: `@Transactional(isolation = Isolation.READ_COMMITTED)`
+
+
+
+#### 3. 回滚规则属性
+
+- 精细化控制哪些异常会触发事务回滚
+
+- **`@Transactional`的默认规则**: 仅在 `RuntimeException` 和 `Error` 发生时回滚。
+
+
+
+##### `rollbackFor`属性
+
+- **`rollbackFor`**: 指定一个或多个异常类，当这些异常（或其子类异常）抛出时，**触发回滚**。
+
+  >`rollbackFor` 的作用是**在默认规则的基础上，追加新的回滚规则**，**而不是替换掉默认规则**
 
   ```java
-  @Service
-  public class UserServiceImpl implements UserService {
-  
-      @Autowired
-      private UserMapper userMapper;
-  
-      @Transactional // 声明此方法需要事务管理
-      public void transferMoney(Long fromId, Long toId, BigDecimal amount) {
-          // 1. 扣款
-          userMapper.decreaseBalance(fromId, amount);
-  
-          // 模拟一个异常
-          if (true) {
-              throw new RuntimeException("发生未知异常，转账失败！");
-          }
-  
-          // 2. 存款
-          userMapper.increaseBalance(toId, amount);
-      }
+  // 即使是 IOException (受检异常)，也触发回滚
+  @Transactional(rollbackFor = Exception.class)
+  public void processFile() throws IOException {
+      // ...
+      throw new IOException("文件读写错误");
   }
   ```
 
-  - 在这个例子中，因为 `decreaseBalance` 之后抛出了异常，Spring 的事务管理器会捕获到它，并自动执行回滚，`decreaseBalance` 操作对数据库的修改将会被撤销，保证了数据的一致性。
+##### `noRollbackFor`属性
 
-#### 事务的传播行为(`propagation`属性)
+- **`noRollbackFor`**: 指定一个或多个异常类，当这些异常抛出时，**不触发回滚**
 
-- 当一个事务方法（方法A）调用另一个事务方法（方法B）时，方法B的事务应该如何执行？是加入方法A的现有事务，还是开启一个自己的新事务？这就是**事务的传播行为**所要定义的
+  >`noRollbackFor`的作用是在**默认应该回滚的情况下，指定某些异常不回滚**
 
-  - `@Transactional` 注解的 `propagation` 属性可以设置传播行为，最常用的有：
-
-    - **`REQUIRED`**：**默认值**。如果当前存在事务，则加入该事务；如果当前没有事务，则创建一个新的事务。这是最常见的选择，适用于绝大多数场景。
-
-    - **`REQUIRES_NEW`**：**总是创建一个新的事务**。如果当前存在事务，则将当前事务挂起。新事务与外部事务完全独立，它有自己的隔离级别和锁，互不影响。
-      - **适用场景**：希望内部方法的事务提交或回滚，不影响外部方法的事务。例如，一个主业务是下单，其中需要调用一个**必须成功**的日志记录方法。可以将日志记录方法设置为 `REQUIRES_NEW`，这样即使外层的下单业务失败回滚，日志记录的事务也能独立提交成功。
-    - **`SUPPORTS`**：如果当前存在事务，则加入该事务；如果当前没有事务，则以非事务的方式继续运行。
-
-    - **`NOT_SUPPORTED`**：以非事务方式运行，如果当前存在事务，则把当前事务挂起。
-
-    - **`NESTED`**：如果当前存在事务，则在嵌套事务内执行。嵌套事务是外部事务的子事务，它依赖于外部事务。如果外部事务回滚，嵌套事务也会回滚。但嵌套事务内部的回滚，不会导致外部事务的回滚。它使用数据库的**保存点（Savepoint）**机制实现。
-      - **与 `REQUIRES_NEW` 的区别**：`REQUIRES_NEW` 是一个完全独立的事务，而 `NESTED` 是外部事务的一部分。
+  ```java
+  // 当发生自定义的库存不足异常时，不回滚，允许程序继续处理
+  @Transactional(noRollbackFor = InsufficientStockException.class)
+  public void placeOrder() {
+      // ...
+      throw new InsufficientStockException("库存不足，但无需回滚其他操作");
+  }
+  ```
 
 
 
-#### 事务的隔离级别(`isolation`属性)
+#### 4. 其他属性
 
-- 隔离性（Isolation）是 ACID 中最复杂的特性。当多个事务并发访问同一份数据时，可能会出现以下问题：
-
-  1. **脏读 (Dirty Read)**：一个事务读取到了另一个事务**尚未提交**的数据。
-  2. **不可重复读 (Non-repeatable Read)**：在一个事务内，多次读取同一行数据，结果却不一致。这是因为在读取间隔，有另一个事务提交了对该数据的修改。
-  3. **幻读 (Phantom Read)**：在一个事务内，多次执行范围查询（如 `SELECT ... WHERE age > 20`），返回的记录数不一致。这是因为在查询间隔，有另一个事务插入或删除了符合条件的新数据。
-
-- 为了解决这些问题，SQL 标准定义了四种隔离级别，可以通过 `@Transactional` 的 `isolation` 属性设置：
-
-  - **`READ_UNCOMMITTED` (读未提交)**：最低级别，允许脏读、不可重复读和幻读。基本不使用。
-
-  - **`READ_COMMITTED` (读已提交)**：**解决了脏读**。大多数数据库的默认级别（如 Oracle, SQL Server）。
-
-  - **`REPEATABLE_READ` (可重复读)**：**解决了脏读和不可重复读**。MySQL InnoDB 引擎的默认级别。
-
-  - **`SERIALIZABLE` (可串行化)**：最高级别，通过加锁强制事务串行执行，**解决了所有问题**，但性能最差。
-
-- **设置示例**： `@Transactional(isolation = Isolation.READ_COMMITTED)`
+- **`readOnly` (boolean)**: 将事务设置为只读。可以帮助数据库进行查询优化，并防止意外的写操作。建议在所有查询方法上都开启此属性。
+  - **示例**: `@Transactional(readOnly = true)`
+- **`timeout` (int)**: 设置事务的超时时间（秒）。如果事务执行时间超过该值，将被强制回滚。
 
 
 
-#### 事务的回滚规则
+### 3.3 `@Transactional` 失效场景及原因
 
-- 默认情况下，Spring 的声明式事务只在遇到 **`RuntimeException` (运行时异常)** 和 **`Error` (错误)** 时才会回滚。对于**受检异常 (Checked Exception)**，它**不会**回滚。
+1. **应用在非 `public` 方法上**
 
-- 这是一个常见的陷阱。例如，如果方法中抛出了 `IOException`，默认情况下事务不会回滚。我们可以通过 `rollbackFor` 和 `noRollbackFor` 属性来定制这个行为。
+   - **原因**: Spring AOP 的代理机制决定了它只能代理 `public` 方法。`protected`, `private` 或 `default` 访问权限的方法上的 `@Transactional` 注解将不会生效。
 
-  - **`rollbackFor`**：指定哪些异常类型需要触发回滚。
+2. **方法内部调用 (this 调用)**
 
-    ```java
-    // 无论是运行时异常还是受检异常，只要是 Exception 的子类，都回滚
-    @Transactional(rollbackFor = Exception.class)
-    public void doSomething() throws IOException {
-        // ...
-        throw new IOException("文件读写错误");
-    }
-    ```
+   - **原因**: 当一个类的方法 `A()` 调用同一个类的另一个方法 `B()`（`B`上有`@Transactional`注解）时，这个调用是通过 `this` 引用直接发生的，而不是通过 Spring 的代理对象。因此，AOP 切面无法拦截到对 `B()` 的调用，事务也就不会生效。
+   - **解决方案**:
+     - 注入自己代理对象调用。
+     - 使用 `AopContext.currentProxy()` 获取当前代理对象来调用。
+     - 将事务方法移到另一个 Bean 中，通过依赖注入调用。
 
-  - **`noRollbackFor`**：指定哪些异常类型**不**需要触发回滚。
+3. **异常被 `try-catch` 捕获且没有重新抛出**
 
-    ```java
-    // 即使发生了我们自定义的业务异常，也不要回滚事务
-    @Transactional(noRollbackFor = MyBusinessException.class)
-    public void doAnotherThing() {
-        // ...
-        throw new MyBusinessException("这是一个预期的业务状态，无需回滚");
-    }
-    ```
+   - **原因**: Spring AOP 依赖于捕获从方法中**抛出**的异常来决定是否回滚。如果在方法内部将异常 `catch` 掉了，并且没有在 `catch` 块中重新抛出，AOP 切面就感知不到异常的发生，事务会正常提交。
+
+   ```java
+   @Transactional
+   public void wrongCatch() {
+       try {
+           // ... 发生异常
+           throw new RuntimeException("出错了");
+       } catch (Exception e) {
+           // 异常被"吃掉"了，没有重新抛出
+           log.error("发生异常，但不影响事务提交");
+       }
+       // 这里会正常提交事务
+   }
+   ```
+
+4. **数据库引擎不支持事务**
+
+   - **原因**: 例如，MySQL 的 MyISAM 存储引擎就不支持事务。如果表使用了该引擎，`@Transactional` 注解自然无效。需要确保使用支持事务的引擎，如 InnoDB。
+
+5. **`propagation` 配置错误**
+
+   - **原因**: 如果一个需要事务的方法（如 `save`）被一个配置为 `NOT_SUPPORTED` 或 `NEVER` 的外部方法调用，那么 `save` 方法的事务将不会开启。
+
+6. **事务方法中 `try-finally` 的陷阱**
+
+   - **问题描述**: 在一个事务方法中，如果 `try` 块发生异常，即使 `finally` 块中的代码（如记录日志）被执行，其数据库操作也会被一同回滚。
+
+   - **原因**: `finally` 块仍然在 `save` 方法的事务边界之内。当 `try` 块的异常将整个事务标记为“仅回滚”（rollback-only）状态时，`finally` 块中的数据库操作会加入这个注定要失败的事务，因此也被回滚。
+
+   - **解决方案**: 如果希望 `finally` 中的操作（如日志记录）必须成功，需要让它在一个**新的、独立的事务**中运行。这可以通过为日志方法配置 `Propagation.REQUIRES_NEW` 实现。
+
+     ```java
+     // LogServiceImpl.java
+     @Service
+     public class LogServiceImpl implements LogService {
+         @Transactional(propagation = Propagation.REQUIRES_NEW)
+         public void recordLog() {
+             // ... 记录日志的数据库操作
+         }
+     }
+     ```
+
+     
+
+### 3.4 事务管理的日志配置
+
+```yml
+logging:
+  level:
+    # 将 Spring 框架的事务管理日志级别设置为 DEBUG
+    # 这会输出事务的创建、提交、回滚等关键信息
+    org.springframework.transaction: DEBUG
+    
+    # 如果需要更详细的信息（例如事务同步、资源绑定等），可以设置为 TRACE
+    # org.springframework.transaction: TRACE
+
+    # 有时查看数据源相关的日志也很有帮助
+    # org.springframework.jdbc.datasource: DEBUG
+```
 
 
 
-## 4. DTO(Data Transfer Object)模式
+### 3.5 最佳实践
 
-- **是什么**: DTO 是一个简单的数据传输对象（POJO），它的唯一目的就是在不同层之间（特别是 Service 层和 Controller 层之间）传递数据。它不应该包含任何业务逻辑。
+1. **注解位置：首选实现类，可用于类级别，避免用于接口**
+   - **首选位置 - 实现类的方法上**：这是最精确、最清晰的用法，明确地为需要事务的 `public` 方法开启事务管理。
+   - **类级别注解 - 提供默认配置**：当 `@Transactional` 放在一个类上时，它会为该类中**所有 `public` 方法**设置一个统一的事务规则。如果某个方法需要特殊的规则（如只读），可以在该方法上再次使用 `@Transactional` 注解，**方法级的配置会覆盖类级的配置**。这对于批量配置写操作事务非常方便。
+   - **应避免的位置 - 接口上**：虽然技术上可行，但强烈不推荐。
+     - **破坏接口纯粹性**：事务管理属于**实现细节**，不应该污染作为“契约”的接口定义。
+     - **代理失效风险**：Spring Boot 默认使用 CGLIB 代理，它会忽略接口上的注解，只识别实现类上的注解，这可能导致事务在不经意间失效。
+2. **明确职责**: 事务注解应只用于业务逻辑层（Service 层），不应滥用在 Controller 或 DAO 层。
+3. **粒度控制**: 尽量缩小事务的范围，避免在事务中包含耗时操作（如 RPC 远程调用、大量计算），以减少数据库锁的持有时间，提高并发性能。
+4. **善用 `readOnly`**: 对于所有只读的查询操作，都应该添加 `@Transactional(readOnly = true)`，这能提升查询效率。
+5. **注意回滚规则**: 明确你的方法可能抛出的异常类型，并使用 `rollbackFor` 妥善处理受检异常的回滚场景。
+
+
+
+## 4. DTO模式
+
+- **是什么**: DTO(Data Transfer Object) 是一个简单的数据传输对象（POJO），它的唯一目的就是在不同层之间（特别是 Service 层和 Controller 层之间）传递数据。它不应该包含任何业务逻辑。
 
 - **为什么需要 (核心)**: 直接将数据库实体（Entity）暴露给表现层是一种非常不好的实践，可能导致：
 
@@ -1975,12 +2137,6 @@
 
 
 
-# 配置文件yml
-
-![image-20250818212648949](./assets/image-20250818212648949.png)
-
-
-
 # 全局异常处理器
 
 - 在开发 Web 应用时，后端服务在处理请求的过程中可能会遇到各种预期的或意外的异常。如果没有统一的处理机制，你可能需要在每个 Controller 方法中都使用 `try-catch` 块来捕获异常，这会导致大量重复代码，难以维护。
@@ -2072,4 +2228,383 @@
    - `404 Not Found`：资源未找到。
    - `500 Internal Server Error`：服务器内部未知错误。
 4. **记录日志**：在异常处理器中，务必使用日志框架（如 SLF4J + Logback）记录详细的异常信息，特别是对于未知的服务器内部错误，这对于排查问题至关重要。
+
+
+
+
+
+# 配置
+
+## 核心思想
+
+- ”配置”：本质上都是在做同一件事：**用不同的方式告诉 Spring 容器如何创建、配置和管理这些 Bean**。
+
+
+
+## `@Configuration` 和 `@Bean`
+
+- 这是最核心、最基础的配置方式，**完全用 Java 代码来定义 Bean**
+
+### `@Configuration`
+
+- `@Configuration`：
+  - `@Configuration` 首先是一个 `@Component`，所以它会把被注解的类本身注册为一个 Bean
+  - 除此之外，它还有一个特殊的功能：它会告诉 Spring 容器，**这个类是一个“Bean 工厂”**，请检查**它内部所有被 `@Bean` 注解的方法**，并**将这些方法的返回值也注册为新的 Bean**。
+    - 特殊情况：
+      - 没有返回值 (`void`) 的方法会怎么样？
+        - 会直接报错
+        - Spring 容器在启动时会检查所有 `@Bean` 方法，它期望这些方法能返回一个对象来注册为 Bean。如果一个 `@Bean` 方法的返回类型是 `void`，Spring 会认为这是一个无效的 Bean 定义，并在启动阶段抛出异常
+      - 返回值是基本数据类型会怎么样？
+        - **可以，但不常见**
+        - Spring 会将这个基本数据类型**自动装箱**成对应的**包装类**，并将其注册为一个 Bean
+      - 返回值是 `null` 会怎么样？
+        - **这个 Bean 将不会被创建和注册**
+
+
+
+### `@Bean`
+
+- `@Bean`：
+
+  - 它**用在方法上**，这个方法的**返回值**就会被注册为一个 Bean，**默认的 Bean 名字就是方法名**
+
+    > Bean，说白了，就是一个由 Spring 容器（IoC Container）负责创建、管理和维护的 Java 对象
+
+  - **进阶知识：`@Bean` 方法可以重载吗？**
+
+    - 答案是**可以，但不推荐直接使用**，因为它会造成歧义。
+
+      - 如果你定义了多个同名但参数不同的 `@Bean` 方法，Spring 会为每一个都创建一个 Bean，但它们的**默认 Bean 名字都是相同的方法名**。这在**进行依赖注入时，会导致 Spring 不知道该选择哪一个，从而抛出 `NoUniqueBeanDefinitionException` 异常**。
+
+      - **最佳实践**：如果你确实需要根据不同参数创建同类型的多个 Bean，**必须为它们指定唯一的名字**。
+
+      - 示例
+
+        ```JAVA
+        @Configuration
+        public class MultiBeanConfig {
+        	// 正确做法：为每个重载方法指定唯一的名字
+        	@Bean("defaultDataSource")
+        	public DataSource dataSource() {
+            	// 创建一个默认的数据源
+            	return new DataSource("default_url");
+        	}
+        	
+        	@Bean("customDataSource")
+        	public DataSource dataSource(String url) {
+            	// 根据传入的 url (需要容器中存在一个 String 类型的 Bean) 创建数据源
+            	return new DataSource(url);
+        	}
+        }
+        ```
+
+        - 这样，你就可以通过  `@Qualifier` 或 `Resource()` 来精确注入你需要的那个 Bean 了
+
+
+
+### 示例代码
+
+```JAVA
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration	//定义了@Configuration
+public class ComputerConfig {
+
+    // 定义一个名为 "cpu" 的 Bean (@Bean)
+    @Bean
+    public CPU cpu() {
+        // 方法体里是你创建和初始化这个对象的逻辑
+        return new IntelCPU("i9-13900K");
+    }
+
+    // 定义一个名为 "memory" 的 Bean
+    @Bean
+    public Memory memory() {
+        return new KingstonMemory("DDR5 64GB");
+    }
+
+    // 定义一个 "computer" Bean，它依赖其他的 Bean
+    @Bean
+    public Computer computer(CPU cpu, Memory memory) {
+        // Spring 会自动将上面定义的 cpu 和 memory Bean 注入进来
+        return new Computer(cpu, memory);
+    }
+}
+
+// (下面是示例用的简单类)
+interface CPU { String model(); }
+class IntelCPU implements CPU {
+    private String model;
+    public IntelCPU(String model) { this.model = model; }
+    public String model() { return model; }
+}
+
+interface Memory { String spec(); }
+class KingstonMemory implements Memory {
+    private String spec;
+    public KingstonMemory(String spec) { this.spec = spec; }
+    public String spec() { return spec; }
+}
+
+class Computer {
+    private CPU cpu;
+    private Memory memory;
+    public Computer(CPU cpu, Memory memory) {
+        this.cpu = cpu;
+        this.memory = memory;
+        System.out.println("电脑组装完成! CPU: " + cpu.model() + ", 内存: " + memory.spec());
+    }
+}
+```
+
+- **总结：`@Configuration` + `@Bean` 是 Spring 中最基础、功能最强大的 Bean 定义方式。它允许你用代码的全部能力来控制 Bean 的创建过程**
+
+
+
+## 配置文件
+
+- **配置文件**的核心作用是：**将易变的配置值从代码中分离出来**。
+
+- SpringBoot 默认支持两种格式：
+
+  - **`application.properties`** (键值对格式)
+
+    ```properties
+    server.port=8080
+    app.name=My Awesome App
+    app.author=Gemini
+    ```
+
+  - **`application.yml`** (YAML, 层级格式，更推荐)
+
+    ```yaml
+    server:
+      port: 8080
+    app:
+      name: My Awesome App
+      author: Gemini
+    ```
+
+
+
+## `@Value` 读取单个参数
+
+### 知识点
+
+- 现在我们有了配置文件，怎么把里面的值读到代码里呢？`@Value` 就是最直接的方式
+
+  - **`@Value("${配置项的key}`**：**【读取单个参数】**
+
+    - 它可以注入**单个**配置值到**类的指定字段**上
+    - `$` 符号表示“这是一个占位符，请从配置文件里找”
+    - 可以提供默认值，格式为 **`@Value("${配置项的key:默认值}")`**
+
+  - **`@Value` 不强制配置文件中的属性名和类中的属性名保持一致。**
+
+    > 它们是完全独立的，`@Value` 只关心你写在 `"${...}"` 里面的那个**键 (key)**。
+
+  - 如果 `@Value` 中的属性没找到，并且你**没有提供默认值**，那么你的 **Spring Boot 应用在启动时会直接失败并报错**
+
+    > 这是一种“快速失败”的设计机制，目的是为了防止因为缺少必要的配置而导致程序在运行时出现更隐蔽的问题
+
+  - 赋值步骤
+
+    - **第一步：对象实例化 (Java 做的事)** 当 Spring 创建这个类的对象时，首先会执行 Java 自身的初始化逻辑。在这个阶段，`private String myVar = "初始值";` 这行代码会被执行，此时变量 `myVar` 的值确实是 "初始值"。
+    - **第二步：属性注入 (Spring 做的事)** 对象创建好之后，Spring 会接管过来，开始处理像 `@Value`、`@Autowired` 这样的注解。当它看到 `@Value` 时，它会去配置文件里找到对应的值，然后**覆盖**掉 `myVar` 变量当前的值。
+
+
+
+### 示例
+
+- **示例代码：** 假设 `application.properties` 中有：
+
+  ```properties
+  app.name=My Awesome App
+  app.version=1.0.0
+  ```
+
+  ```java
+  import org.springframework.beans.factory.annotation.Value;
+  import org.springframework.stereotype.Component;
+  
+  @Component
+  public class AppInfoService {
+      // 1. 从配置文件读取 app.name 的值
+      @Value("${app.name}")
+      private String appName;
+  
+      // 2. 读取 app.version 的值
+      @Value("${app.version}")
+      private String appVersion;
+  
+      // 3. 读取一个可能不存在的值，并提供默认值 "default-author"
+      @Value("${app.author:default-author}")
+      private String appAuthor;
+  
+      public void printAppInfo() {
+          System.out.println("App Name: " + appName);
+          System.out.println("App Version: " + appVersion);
+          System.out.println("App Author: " + appAuthor);
+      }
+  }
+
+- **总结：`@Value` 简单直接，适合注入零散的、少量的配置项**
+
+
+
+## `@ConfigurationProperties` 批量读取
+
+### 知识点
+
+- 如果你的配置项非常多，而且有层级关系，比如数据库连接池的配置：
+
+  ```yaml
+  db:  # <--- 这就是前缀
+    url: jdbc:mysql://localhost:3306/mydb
+    username: root
+    password: root
+    pool:
+      max-size: 10 		# 注意这里是短横线命名 (kebab-case)
+      min-idle: 2
+  ```
+
+  - 用 `@Value` 一个一个去注入会非常繁琐且容易出错。这时，**`@ConfigurationProperties`** 就派上用场了
+
+    - **`@ConfigurationProperties(prefix = "前缀")`**：**【批量参数映射】**
+
+      - **路径要写对**
+
+      - Spring Boot 会**自动**将**配置文件中**这个**前缀**下面的所有属性，绑定到你**这个注解所在的类的同名字段上**
+
+        > 这里必须同名，这个注解的核心设计就是依赖于“同名”这个约定
+
+      - 要使用这个注解，**必须**要让它被 IoC 容器管理，否则 `@ConfigurationProperties` 注解不会生效(甚至报错，密码的)
+
+        > `@ConfigurationProperties` 的所有功能，比如读取配置文件、绑定属性等，都是 Spring 框架在管理 Bean 的生命周期时提供的。
+        >
+        > 如果你只是一个普通的、自己 `new` 出来的 Java 对象，Spring 根本“看”不到它，自然也不会为它处理任何注解
+
+      - 这个注解作用的类可不像`@Configuration`作用的类一样会被IOC容器管理，这个类要想被IOC容器管理，要自己实现
+
+    
+
+### 各种问题
+
+- 如果**没有在配置文件中找到这个前缀**会怎么样？
+  - 应用会**正常启动，不会报错**。
+
+
+
+- 如果**配置文件里有些多余的键，在类里找不到对应的属性**会怎么样？
+  - Spring Boot 会**忽略掉那些多余的键**，也**不会报错**
+
+
+
+- 如果**类中有些多余的属性，在配置文件里找不到对应的键**会怎么样？
+  - 应用会正常启动，不会报错。**类中多余的属性会保持其在 Java 中的初始值。**
+
+
+
+- 这个注解是用来给属性赋值的吗？
+
+  - 是的，完全**正确！**
+  - 它做的事情就是：
+    1. 找到指定前缀 (`prefix`) 下的所有配置项
+    2. 找到目标 Java 类里的所有字段（属性）
+    3. 把**能匹配上的配置项的值**，**通过调用 `setter` 方法或者直接操作字段的方式，赋给同名的属性**
+
+  
+
+- 赋值是在什么时候？
+
+  - 赋值发生在 Spring 容器**创建并初始化这个 Bean 的过程当中**
+    具体来说，Spring 会先调用这个类的构造函数**创建一个“空白”对象**，**然后**再把从配置文件里读到的值，通过 `setter` 方法一个个“填”进去
+
+  
+
+- 获取到的对象的值一定是配置文件中的吗？
+
+  1. **如果你是从 Spring 容器中获取这个对象（Bean）**，比如通过 `@Autowired` 注入，那么你拿到的**一定**是已经赋好值的对象。因为 **Spring 保证了只有当一个 Bean 完全初始化（包括属性赋值）之后，才会把它交给其他需要它的地方使用**
+  2. **如果你是自己手动 `new` 这个对象**，比如 `DatabaseProperties props = new DatabaseProperties();`，那么这个对象**不会**被赋值。因为这个 `new` 的过程完全脱离了 Spring 容器的管理，`@ConfigurationProperties` 注解自然也不会生效
+
+
+
+### **示例代码**
+
+- **第一步：创建配置属性类** 这个类不需要是 Bean，只需要有字段和对应的 `get/set` 方。
+
+  ```JAVA
+  import org.springframework.boot.context.properties.ConfigurationProperties;
+  import org.springframework.stereotype.Component;
+  
+  // 1. @Component 让这个类成为一个 Bean，从而 Spring 可以管理它
+  // 2. @ConfigurationProperties 告诉 Spring，将配置文件中 "db" 开头的属性绑定到这个类的字段上
+  @Component
+  @ConfigurationProperties(prefix = "db")
+  public class DatabaseProperties {
+  
+      private String url;
+      private String username;
+      private String password;
+      private Pool pool = new Pool(); // 注意要初始化内部对象
+  
+      // 内部静态类，对应 yaml 中的 pool
+      public static class Pool {
+          private int maxSize;
+          private int minIdle;
+          // Getters and Setters for maxSize, minIdle...
+          public int getMaxSize() { return maxSize; }
+          public void setMaxSize(int maxSize) { this.maxSize = maxSize; }
+          public int getMinIdle() { return minIdle; }
+          public void setMinIdle(int minIdle) { this.minIdle = minIdle; }
+      }
+  
+      // Getters and Setters 方法
+      public String getUrl() { return url; }
+      public void setUrl(String url) { this.url = url; }
+      public String getUsername() { return username; }
+      public void setUsername(String username) { this.username = username; }
+      public String getPassword() { return password; }
+      public void setPassword(String password) { this.password = password; }
+      public Pool getPool() { return pool; }
+      public void setPool(Pool pool) { this.pool = pool; }
+  }
+  ```
+
+  > **提示**：让 Spring Boot 知道这个属性类的存在有两种常见方式：
+  >
+  > 1. 直接在属性类上加 `@Component` (如上例，最简单)。
+  > 2. 在你的 `@Configuration` 类上加 `@EnableConfigurationProperties(DatabaseProperties.class)`。
+
+
+
+- **第二步：在其他地方使用这个配置对象**
+
+  ```JAVA
+  import org.springframework.beans.factory.annotation.Autowired;
+  import org.springframework.stereotype.Service;
+  
+  @Service
+  public class DatabaseService {
+  
+      private final DatabaseProperties dbProps;
+  
+      // 直接注入整个配置对象
+      @Autowired
+      public DatabaseService(DatabaseProperties dbProps) {
+          this.dbProps = dbProps;
+      }
+  
+      public void connect() {
+          System.out.println("Connecting to DB with URL: " + dbProps.getUrl());
+          System.out.println("Username: " + dbProps.getUsername());
+          System.out.println("Max Pool Size: " + dbProps.getPool().getMaxSize());
+      }
+  }
+  ```
+
+  - **总结：`@ConfigurationProperties` 是现代 Spring Boot 开发的推荐方式。它提供了类型安全、结构清晰、易于维护的配置绑定，完胜 `@Value`**
+
+
 
