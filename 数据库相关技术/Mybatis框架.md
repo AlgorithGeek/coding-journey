@@ -1089,201 +1089,542 @@ public interface UserMapper {
 
 - 当查询结果需要封装成 Java 对象时，MyBatis 提供了两种映射方式：`resultType`和`resultMap`
 - 如果字段名不同，还能用`AS`起别名大法
+- MyBatis Mapper 方法的返回值其实主要就是这几类
+  - **单个对象**、**对象集合**、**`void`**、以及**表示影响行数的整数**
+
 
 
 
 ### 1. `resultType`自动:映射
 
-> 我对这个有偏见，我感觉这个老垃圾了
+> 我对这个有偏见，我感觉这个老垃圾了，我不喜欢
 
-- `resultType` 是一种“约定优于配置”的体现。你告诉 MyBatis 希望得到哪种类型的 Java 对象，它会**自动**尝试将 SQL 查询结果的列一一映射到该对象的属性上
+#### 概述
+
+- `resultType` 的工作原理非常直接：它尝试**将查询结果集中每一列的名称(这里不是数据库中的,是查询结果集中的)**，与目标 Java 对象中**属性的名称**进行匹配，如果匹配成功，就**调用该属性的 `setter` 方法进行赋值**。
+
+- 它的使命是处理简单、直接的映射场景，无需手动配置
+
+
+
+#### `resultType` 的两大核心阶段
+
+- 整个自动化流程可以清晰地分为“匹配”和“封装”两个阶段
+
+##### 1. 匹配阶段：如何找到对应的属性？
+
+- 当 MyBatis 从数据库获取到一行数据后，它会遍历这一行的每一列。对于每一列，它会按照以下顺序（优先级从高到低）去寻找 POJO 中对应的属性：
+
+  1. **寻找完全同名的属性**
+
+     - MyBatis 会**先拿列名（例如 `user_name`）直接去POJO里找一个一模一样的属性名**。这个匹配过程**不区分大小写**
+
+  2. **下划线到驼峰的自动转换 (推荐开启)**
+
+     - 如果在 SpringBoot 全局配置文件中设置了 
+
+       ```yaml
+       mybatis:
+         configuration:
+           map-underscore-to-camel-case: true
+       ```
+
+       - MyBatis会自动将数据库列名的下划线命名法（如 `user_name`）转换成 Java 的驼峰命名法（`userName`），然后再去 POJO 中寻找匹配的属性
+
+     - 这是**最推荐的实践方式**，因为它能让数据库和 Java 代码各自保持自己的命名规范，实现解耦
+
+  3. **SQL 别名的最高优先级**	
+
+     - 如果在 SQL 查询中为列指定了别名（`AS`），那么 MyBatis 将**只使用这个别名**来进行匹配，而忽略原始的列名
+
+     - 例如 `SELECT user_name as name FROM user`，MyBatis 就会拿着 `name` 去 POJO 中寻找 `name` 属性
+
+- **如果匹配失败会怎样？**
+
+  - 如果某一列在POJO中找不到对应的属性，MyBatis 会**静默地忽略**这一列的数据，不会报错
+
+  - 反之,如果POJO中的某个属性在查询结果中找不到对应的列,那么这个属性的值将是`null`(或基本类型的默认值，如 `int` 的 `0`)
+
+
+
+##### 2. 封装阶段：如何创建和填充对象？
+
+- 当匹配成功后，MyBatis 就开始创建并填充你的 Java 对象
+
+1. **实例化对象 (依赖无参构造)**
+   - MyBatis 会通过**反射**机制，调用你在 `resultType` 中指定的那个类的**无参构造函数**来创建一个新的实例（例如 `new User()`）
+   - **关键前提**：POJO**必须**有一个**公共的、无参数的构造方法**，否则 MyBatis 在运行时会因无法创建对象而抛出异常
+2. **调用 Setter 方法赋值**
+   - 对于每一个成功匹配上的“列-属性”对，MyBatis 会找到该属性对应的 `setter` 方法（例如，`userName` 属性对应 `setUserName(...)` 方法）
+   - 然后，它会从数据库结果集中取出列的值，并调用这个 `setter` 方法，将值赋给对象的属性。MyBatis 会自动处理大部分基础的 JDBC 类型和 Java 类型之间的转换
+
+
+
+#### 特殊情况：返回值是集合
+
+- 当 Mapper 接口方法的返回值是集合类型，并且你使用的是 `resultType` 来指定集合中元素的类型时，MyBatis 会采用“一行一对象”的基本映射策略。然而，最终返回的集合类型不同，其内部处理和最终结果也会有所差异。
+
+##### 返回值是 `List`
+
+- 这是最常见也是最直接的情况
+  1. **创建空列表**：在处理结果集之前，MyBatis 会先创建一个空的 `ArrayList` 实例，用于存放最终的结果。
+  2. **循环处理每一行**：MyBatis 会遍历数据库返回的结果集 (`ResultSet`)，对每一行数据重复执行“创建对象 -> 属性匹配 -> 封装数据”的全过程。
+     - 处理第 1 行 -> 创建一个 `User` 对象并填充数据。
+     - 处理第 2 行 -> 创建**另一个**新的 `User` 对象并填充数据。
+     - 以此类推...
+  3. **添加到列表中**：每成功创建一个对象，MyBatis 都会把它 `add` 到第一步创建的那个 `ArrayList` 中。
+  4. **返回列表**：当结果集的所有行都被处理完毕后，MyBatis 返回这个已经装满了对象的 `List`。即使查询结果中有多行数据完全相同，`List` 也会包含所有行对应的对象，不会去重。
+
+
+
+##### 返回值是 `Set`
+
+- 返回 `Set` 的主要目的是利用其元素唯一的特性进行自动去重。
+  1. **创建空集合**：MyBatis 会先创建一个空的 `HashSet` 实例。
+  2. **循环处理每一行**：处理逻辑与 `List` 完全相同，依然是为每一行创建一个新的对象。
+  3. **添加到集合中（关键区别）**：当 MyBatis 尝试将新创建的对象 `add` 到 `Set` 中时，`Set` 的特性会生效。它会根据对象的 `equals()` 和 `hashCode()` 方法来判断该对象是否已存在于集合中。
+     - 如果对象已存在，则**不会**将其添加进去。
+     - 如果对象不存在，则添加成功。
+  4. **返回集合**：最终返回一个包含了所有**不重复**对象的 `Set`。要使其正常工作，你必须在 `resultType` 指定的类（如 `User`）中正确地重写 `equals()` 和 `hashCode()` 方法。
+
+
+
+##### 返回值是 `Map`
+
+- 返回 `Map` 是一种特殊情况，用于需要通过唯一键快速查找对象的场景。直接在 XML 中指定 `resultType` 是不够的
+
+  1. **需要 `@MapKey` 注解**：你必须在 Mapper 接口的方法上添加 `@MapKey("propertyName")` 注解，其中 `propertyName` 是 Java 对象中某个属性的名称，该属性对应的值将作为 Map 的 Key
+
+     ```java
+     @MapKey("id") // 使用 User 对象的 id 属性作为 Map 的 key
+     Map<Long, User> findAllUsersAsMap();
+     ```
+
+  2. **创建空映射**：MyBatis 会先创建一个空的 `HashMap`
+
+  3. **循环处理每一行**： 
+
+     - a. 为每一行创建一个 `resultType` 指定的对象（作为 Map 的 Value）
+     - b. 从这个新创建的对象中，获取 `@MapKey` 注解指定的属性值（如 `user.getId()`），作为 Map 的 Key
+     - c. 将 `(Key, Value)` 这个键值对 `put` 到 Map 
+
+  4. **返回映射**：返回最终的 `Map`。如果结果集中有多行的 Key 是相同的，后处理的行会**覆盖**先处理的行。
+
+
+
+#### 总结与弊端
+
+- **优点**：`resultType` 配置简单，对于单表查询且命名规范的场景非常高效
+- **核心弊端**：它只能进行**扁平化**的自动映射，无法处理列名与属性名不匹配的复杂情况，更无法组装带有嵌套对象（如一对一、一对多）的复杂 Java 对象
+
+- 当 `resultType` 的能力达到上限时，就是功能更强大、更灵活的 `<resultMap>` 发挥作用的时候了。
+
+
+
+### 2. `resultMap`映射
+
+#### 核心概念：`resultMap` 是什么？
+
+- `resultMap` 是 MyBatis 中最强大、最重要的元素
+  - 当数据库表的列名与 Java 对象的属性名不一致，或需要处理复杂的关联查询（如一对一、一对多）时，`resultMap` 提供了手动的、精细化的映射策略，让你完全掌控从 JDBC `ResultSet` 到 Java 对象的转换过
+
+- **`resultMap` vs `resultType`**
+
+  - 这是理解 `resultMap` 的关键。在一个 `<select>` 标签中，它们是**互斥**的,
+
+    - **`resultType` (自动映射)**：你告诉 MyBatis “这是目标对象的类型，请**自动**尝试将列名（或别名）映射到同名的属性上”。这适用于简单、直接的映射场景
+
+    - **`resultMap` (手动映射)**：你告诉 MyBatis “请**严格按照**我预先定义好的、名为 `xxx` 的这套规则，来将查询结果映射到目标对象上”。这适用于所有复杂场景
 
   
 
-- ##### **适用场景**
+####  解决列名与属性名不匹配
 
-  - **简单查询**：查询结果的列名与 Java 对象的属性名能够直接对应（或通过驼峰转换后能够对应）
+-  `resultMap` 最基础也最常见的应用场景
 
-  - **返回基本类型**：查询结果只有一个值，如 `COUNT(*)`，可以指定 `resultType="int"`
+##### 2.1 定义 `<resultMap>`
 
-  - **返回 Map**：不创建实体类，直接将每一行结果映射成一个 `Map<String, Object>`，其中 key 是列名，value 是对应的值。指定 `resultType="map"` 或 `resultType="java.util.HashMap"`
+- 首先，你需要定义一个 `<resultMap>` 元素，它包含了所有的映射规则
 
+  - **`<resultMap>` 标签属性**:
 
+    - `id`: 必需，这个 `resultMap` 的唯一标识，供 `<select>` 等标签引用
 
+    - `type`: 必需，目标 Java 对象的完整类名或已注册的别名
 
-- ##### **自动映射规则**
+      >`type` 属性告诉 MyBatis：“**当我从数据库查出每一行数据时，我应该创建哪个 Java 类的实例来存放这些数据？**
 
-  - MyBatis 遵循以下两条核心规则进行匹配：
+    - `autoMapping`: (可选, 默认为 `false` 的行为在不同版本中有差异，建议显式设置)
 
-    1. **不区分大小写的直接匹配**：数据库列 `USERNAME` 或 `username` 都能成功匹配到 Java 属性 `username`。
-    2. **下划线到驼峰的转换**：这是最常用也最重要的规则
-       - 当在全局配置中开启 `mapUnderscoreToCamelCase=true`（**Spring Boot 集成下默认开启**）后，数据库列 `user_name` 或 `USER_NAME` 会被自动映射到 Java 属性 `userName`
-       - 这个和全局配置有关，和这个 resultType 没关系
-
-
-
-
-- ##### **局限性**
-
-  - 当遇到以下情况时，`resultType` 将无能为力，此时，就需要 `resultMap` 登场：
-
-    - 列名与属性名完全不匹配，且无法通过驼峰规则转换（例如：列 `u_name` vs 属性 `username`）。
-
-    - 需要进行复杂的关联查询，将多张表的结果组装成一个包含其他对象或集合的复杂对象。
-
-
-
-
-### 2. `resultMap`：强大的手动映射
-
-- `resultMap` 是 MyBatis 中最强大、最重要的元素。我第一次看的JavaWeb网课居然没讲，我要气死，但是没办法，毕竟免费网课
-- 它允许你**手动定义**一套精细的映射规则，完全掌控从结果集到 Java 对象的转换过程，应对任何复杂的场景。
-
-- **核心理念**：`resultType` 和 `resultMap` 在同一个 `<select>` 标签中是**互斥**的，二者择一。因为它们代表了两种不同的指令：“**MyBatis，请你自动处理**” vs “**MyBatis，请严格按我定义的规则处理**”
-
-#### 2.1 解决列名与属性名不一致
-
-- 这是 `resultMap` 最基本的用途
-
-  1. **定义 `<resultMap>`**:
-
-     ```xml
-     <!-- 
-       id: 这个 resultMap 的唯一标识，供 <select> 标签来引用
-       type: 目标 Java 对象的完整类名或别名
-       autoMapping: (可选) 设为 true 时，MyBatis 会在执行手动映射规则后，
-                    再对未明确映射的列进行一次自动映射。非常适用于混合场景
-     -->
-     <resultMap id="userBaseResultMap" type="com.example.entity.User" autoMapping="true">
-         <!-- 
-           <id>: 用于映射主键字段。它不仅是映射，更是向 MyBatis 声明了记录的唯一性，
-                 这对于缓存优化和避免在关联查询中产生重复主对象至关重要。
-         -->
-         <id property="id" column="user_id"/><!-- 这个id标签用来弄主键 -->
-         
-         <!-- 
-           <result>: 用于映射除主键外的普通字段。
-           property: Java 对象的属性名
-           column: 数据库结果集中的列名
-           javaType, jdbcType: (可选) 精确指定属性的 Java 类型和列的 JDBC 类型
-         -->
-         <result property="name" column="user_name"/>	<!-- 用来映射主键外的字段 -->
-         <result property="password" column="user_pwd"/>
-     </resultMap>
-     ```
-
-  2. **在 `<select>` 中引用resultMap**:
-
-     ```xml
-     <select id="findUserById" resultMap="userBaseResultMap">
-         SELECT user_id, user_name, user_pwd, create_time FROM user WHERE user_id = #{id}
-     </select>
-     ```
-
-  >*在这个例子中，`user_id`, `user_name`, `user_pwd` 会被手动映射。如果 `autoMapping="true"`，MyBatis 会继续尝试自动映射 `create_time` 到 `createTime` 属性*
+      - 设为 `true` 时，MyBatis 会在执行完所有明确的 `<id>` 和 `<result>` 手动映射后，**继续对未映射的列进行自动映射**。这在只有少数几个字段不匹配的场景下非常方便。
+      - 设为 `false` 时，MyBatis **只会**处理你在 `resultMap` 中明确定义的映射。
 
   
 
-#### 2.2 关联查询 (一对一 / 一对多)
+  - **`<resultMap>`的子标签**:
 
-- `resultMap` 真正强大的地方在于能够优雅地处理关联关系，只需定义好映射规则，MyBatis 就能自动为你组装出复杂的对象图。
+    - **`<id>`**: 用于映射**主键**字段。它不仅是数据映射，更是向 MyBatis 声明了记录的唯一标识。这对于后续的缓存优化、嵌套查询避免对象重复至关重要
 
-  - **`<association>` (一对一关联)** **场景**：查询订单(Order)及其关联的创建者(User)信息
+      - `property`: Java 对象的属性名
 
-    ```xml
-    <resultMap id="orderWithUserMap" type="Order">
-        <id property="id" column="order_id"/>
-        <result property="orderNo" column="order_no"/>
+      - `column`: 数据库结果集中的列名
+
         
-        <!-- 
-          使用 association 映射 'user' 属性
-          property: 宿主对象(Order)中的属性名 'user'
-          javaType: 关联对象(User)的类型
-        -->
-        <association property="user" javaType="User">
-            <id property="id" column="user_id"/>
-            <result property="username" column="user_name"/>
-        </association>
-    </resultMap>
-    
-    <select id="findOrderById" resultMap="orderWithUserMap">
-        SELECT
-            o.id as order_id,
-            o.order_no,
-            u.id as user_id,
-            u.username as user_name
-        FROM orders o
-        JOIN user u ON o.user_id = u.id
-        WHERE o.id = #{orderId}
-    </select>
-    ```
+
+    - **`<result>`**: 用于映射除主键外的普通字段
+
+      - `property`: Java 对象的属性名
+      - `column`: 数据库结果集中的列名
+      - `javaType`, `jdbcType`: (可选) 精确指定属性的 Java 类型和列的 JDBC 类型，通常 MyBatis 能自动推断，但在处理特殊类型（如 `BLOB`, `CLOB`, 枚举等）时需要指定
 
     
 
-  - **`<collection>` (一对多关联)** **场景**：查询用户(User)及其名下的所有订单(Order)列表。
+    - 这里的`<id>`和`<result>`不要混用，不然可能会引发严重的问题
 
-    ```xml
-    <resultMap id="userWithOrdersMap" type="User">
-        <id property="id" column="user_id"/>
-        <result property="username" column="user_name"/>
-        
-        <!-- 
-          使用 collection 映射 'orderList' 属性
-          property: 宿主对象(User)中的集合属性名 'orderList'
-          ofType: 集合中元素的类型(Order)
-        -->
-        <collection property="orderList" ofType="Order">
-            <id property="id" column="order_id"/>
-            <result property="orderNo" column="order_no"/>
-        </collection>
-    </resultMap>
-    
-    <select id="findUserWithOrders" resultMap="userWithOrdersMap">
-        SELECT
-            u.id as user_id,
-            u.username as user_name,
-            o.id as order_id,
-            o.order_no
-        FROM user u
-        LEFT JOIN orders o ON u.id = o.user_id
-        WHERE u.id = #{userId}
-    </select>
-    ```
+##### 2.2 示例
 
-    - **关联查询的两种实现方式对比**
+- 假设有 `User` 类和 `user` 表：
 
-      | 实现方式     | 原理                                                         | 优点                               | 缺点                                                         | 适用场景                                                     |
-      | ------------ | ------------------------------------------------------------ | ---------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
-      | **嵌套结果** | 一次 `JOIN` 查询，获取所有数据。MyBatis 根据 `resultMap` 的结构在内存中自动组装对象。 | **性能极高**，只有一次数据库交互。 | SQL 语句可能较复杂，可能产生笛卡尔积。                       | **绝大多数关联查询场景的首选和推荐方式。**                   |
-      | **嵌套查询** | 主查询执行后，根据主查询的结果，循环执行N次子查询来获取关联数据。 | SQL 语句简单，逻辑清晰。           | **N+1 问题**：1次主查询 + N次子查询，数据库交互频繁，**性能低下**。 | 极少数情况，或必须配合**懒加载(`fetchType="lazy"`)**使用，以延迟子查询的执行。 |
+  ```java
+  // Java Pojo
+  public class User {
+      private Long id;
+      private String name;
+      private String password;
+      private Date createTime;
+      // getters and setters...
+  }
+  ```
 
+  ```sql
+  -- Database Table
+  CREATE TABLE user (
+      user_id BIGINT PRIMARY KEY,
+      user_name VARCHAR(50),
+      user_pwd VARCHAR(50),
+      create_time DATETIME
+  );
+  ```
 
+  
 
-#### 2.3 `<discriminator>` (鉴别器)
+- **XML Mapper 配置:**
 
-- **作用**：根据某个列的值，来决定使用哪一套具体的映射规则，类似于 Java 中的 `switch` 语句。 
-- **场景**：假设有一个 `vehicle` 表，其中 `vehicle_type` 列可以是 'CAR' 或 'TRUCK'。我们希望根据这个类型将结果映射到不同的子类 `Car` 或 `Truck`。
-
-```xml
-<resultMap id="vehicleResultMap" type="Vehicle">
-    <id property="id" column="id"/>
-    <result property="brand" column="brand"/>
-    <discriminator javaType="string" column="vehicle_type">
-        <case value="CAR" resultMap="carResultMap"/>
-        <case value="TRUCK" resultMap="truckResultMap"/>
-    </discriminator>
-</resultMap>
-
-<resultMap id="carResultMap" type="Car" extends="vehicleResultMap">
-    <result property="doorCount" column="door_count"/>
-</resultMap>
-
-<resultMap id="truckResultMap" type="Truck" extends="vehicleResultMap">
-    <result property="payloadCapacity" column="payload_capacity"/>
-</resultMap>
-```
+  ```xml
+  <!-- 1. 定义一个详细的 resultMap -->
+  <resultMap id="userBaseResultMap" type="com.example.entity.User" autoMapping="true">
+      <!-- 使用 <id> 映射主键，提升性能和准确性 -->
+      <id property="id" column="user_id"/>
+      
+      <!-- 使用 <result> 映射普通字段 -->
+      <result property="name" column="user_name"/>
+      <result property="password" column="user_pwd"/>
+      
+      <!-- 
+        注意：因为 autoMapping="true"，这里的 create_time 列会自动映射到 createTime 属性，
+        无需再写 <result property="createTime" column="create_time"/>。
+        如果 autoMapping="false"，则必须手动添加该行映射。
+      -->
+  </resultMap>
+  
+  <!-- 2. 在查询语句中通过 resultMap 属性引用它 -->
+  <select id="findUserById" resultMap="userBaseResultMap">
+      SELECT user_id, user_name, user_pwd, create_time 
+      FROM user 
+      WHERE user_id = #{id}
+  </select>
+  ```
 
 
+
+#### `resultMap`容错与错误处理
+
+- 当 `resultMap` 中的 `property` (Java属性) 或 `column` (数据库列) 出现不匹配时，MyBatis 的处理方式是不同的
+
+##### 情况一：`column` 在 SQL 查询结果中不存在
+
+- **行为：会忽略，不报错。**
+
+- 这是一个非常灵活的特性，允许你复用 `resultMap`。
+
+  - **表现**：如果在 `<result>` 中指定的 `column` 在 `SELECT` 语句返回的结果集中不存在，MyBatis 会跳过这个映射。
+
+  - **结果**：对应的 Java 属性 (`property`) 将不会被赋值，保留其类型的默认值（对象为 `null`，原始类型为 `0` 或 `false`）。
+
+
+
+##### 情况二：`property` 在 Java 对象中不存在
+
+- **行为：会报错。**
+
+- 这被认为是一个配置错误，MyBatis 会在启动或运行时“快速失败”（Fail-fast）。
+
+  - **表现**：如果在 `<result>` 中指定的 `property` 在 `resultMap` 的 `type` 指定的 Java 类中不存在（即没有该字段或对应的 setter 方法），MyBatis 会在尝试赋值时失败。
+
+  - **结果**：MyBatis 会抛出一个异常（通常是 `ReflectionException`），明确指出在 Java 类中找不到该属性。
+
+
+
+##### 情况三：多个 `<result>` 指向同一个 `column`
+
+- **行为：允许，不报错。**
+
+  - 这是一个合法的特性，允许将同一个数据库列的值赋给多个不同的 Java 属性。
+
+    - **表现**：MyBatis 会按顺序处理 `resultMap` 中的每一个映射规则。
+
+    - **结果**：所有指向这个 `column` 的 `property` 都会被赋予相同的值。
+
+
+
+##### 情况四：多个 `<result>` 指向同一个 `property`
+
+- **行为：不报错，但后面的映射会覆盖前面的。**
+
+- 这种情况通常是一个配置错误，但 MyBatis 遵循“**最后一个为准**”（Last one wins）的原则。
+
+  - **表现**：MyBatis 依然是按顺序处理 `resultMap` 中的映射规则，并执行每一次赋值操作。
+
+  - **结果**：该 `property` 的最终值，将是 `resultMap` 中**最后一个**指向它的 `<result>` 标签所映射的 `column` 的值。
+
+
+
+####  处理关联查询
+
+- `resultMap` 真正强大的地方在于能够优雅地处理对象间的关联关系，自动组装出复杂的对象图
+
+##### 0. 解决的问题
+
+- 当我们使用 `JOIN` 查询时，数据库返回的是一个“扁平化”的二维表结果。
+
+  - 例如，查询订单及其用户，结果集中的每一行都同时包含了订单和用户的字段
+
+    | order_id | order_no | user_id | user_name |
+    | -------- | -------- | ------- | --------- |
+    | 101      | SN202301 | 1       | zhangsan  |
+
+
+
+- 但我们的 Java 对象模型通常是“结构化”或“嵌套”的：一个 `Order` 对象内部包含一个 `User` 对象。
+
+  ```java
+  class Order {
+      private Long id;
+      private String orderNo;
+      private User user; // 嵌套的 User 对象
+  }
+  ```
+
+  
+
+- `<association>` 和 `<collection>` 的使命：
+
+  - 搭建一座桥梁，告诉 MyBatis 如何将这个扁平的结果集，智能地组装成我们想要的嵌套对象结构
+
+
+
+##### 1. `<association>`
+
+- 处理“一对一”或“多对一”关联
+
+- `<association>` 用于映射一个嵌套的 Java 对象属性。换句话说，当你的主对象中包含**另一个单一的对象**时（如 `Order` 包含一个 `User`），就使用它
+
+###### 1.1 概念解析
+
+- `<association>` 标签定义了一个“对象属性”的映射规则。
+  - 告诉MyBatis：“结果集中的这几列数据,不属于主对象,而是应该用来创建一个新的子对象,并把它设置给主对象的某个属性”
+
+
+
+###### 1.2 关键属性
+
+- **`property`**: **必需**。指定宿主对象（如 `Order`）中嵌套对象属性的名称。例如，`property="user"`。
+- **`javaType`**: **必需**。指定这个嵌套对象的完整类名或别名。
+  - 例如，`javaType="com.example.entity.User"` 或 `javaType="User"`。它告诉 MyBatis 应该 `new` 一个什么类型的对象
+
+
+
+###### 1.3 常用子元素
+
+- `<association>` 标签内部的子元素，定义了**如何构建这个嵌套对象**（例如 `User` 对象）的规则。它们与 `resultMap` 根标签下的子元素几乎完全相同
+
+  - **`<id>`**: 用于将结果集中的列映射到嵌套对象的**主键**属性。
+
+  - **`<result>`**: 用于将结果集中的普通列映射到嵌套对象的**普通**属性。
+
+  - **`<constructor>`**: 用于将列数据注入到嵌套对象的**构造方法**中，实现构造器注入。
+    - **`<idArg>`**: 构造方法中用于主键的参数。
+    - **`<arg>`**: 构造方法中的普通参数。
+  - **`<association>`**: 用于处理更深层次的嵌套关系，即嵌套对象内部还包含另一个对象（一对一）。
+  - **`<collection>`**: 用于处理嵌套对象内部包含一个集合属性（一对多）的场景。
+
+  - **`<discriminator>`**: 鉴别器，用于处理更复杂的继承关系映射（例如，一个 `Payment` 属性可能是 `CreditCardPayment` 或 `BankTransferPayment` 类型）。
+
+
+
+###### 1.4 工作原理解析
+
+- 当 MyBatis 处理查询结果时：
+  1. 它首先根据 `resultMap` 的 `type` 属性创建一个主对象实例（例如 `new Order()`）。
+  2. 接着，它处理主对象的普通字段映射（`<id>` 和 `<result>`）。
+  3. 当遇到 `<association property="user" ...>` 时，它会：
+     -  a. 根据 `javaType="User"` 创建一个子对象实例（`new User()`）。 
+     - b. 进入 `<association>` 的内部，按照其内部定义的 `<id>` 和 `<result>` 规则，从结果集中取出 `user_id`, `user_name` 等列，填充到这个新的 `User` 对象中。
+     - c. 最后，调用主对象的 `setUser(User user)` 方法，将填充好的 `User` 对象设置进去。
+
+
+
+###### 1.5 完整示例
+
+- **Java 对象**:
+
+  ```JAVA
+  public class Order {
+      private Long id;
+      private String orderNo;
+      private User user; // 关联的 User 对象
+      // getters and setters...
+  }
+  public class User {
+      private Long id;
+      private String name;
+      // getters and setters...
+  }
+  ```
+
+- **XML Mapper 配置**:
+
+  ```xml
+  <resultMap id="orderWithUserMap" type="Order">
+      <!-- 映射 Order 自身的基础属性 -->
+      <id property="id" column="order_id"/>
+      <result property="orderNo" column="order_no"/>
+  
+      <!-- 定义如何映射嵌套的 'user' 属性 -->
+      <association property="user" javaType="User">
+          <!-- 这里是构建 User 对象的规则 -->
+          <id property="id" column="user_id"/>
+          <result property="name" column="user_name"/>
+      </association>
+  </resultMap>
+  
+  <select id="findOrderById" resultMap="orderWithUserMap">
+      SELECT
+          o.id as order_id,
+          o.order_no,
+          u.id as user_id,
+          u.name as user_name
+      FROM orders o
+      JOIN user u ON o.user_id = u.id
+      WHERE o.id = #{orderId}
+  </select>
+  ```
+
+
+
+##### 2. `<collection>`
+
+- **处理“一对多”关联**
+
+- `<collection>` 用于映射一个集合类型的属性（如 `List`, `Set`）
+  - 当你的主对象中包含**一个对象的集合**时（如 `User` 包含一个 `List<Order>`），就使用它
+
+
+
+###### 2.1 概念解析
+
+- `<collection>` 标签定义了一个“集合属性”的映射规则。它解决了 `JOIN` 查询带来的数据冗余（笛卡尔积）问题，能智能地将多行结果归并到同一个主对象的集合属性中
+
+
+
+###### 2.2 关键属性
+
+- **`property`**: **必需**。指定宿主对象（如 `User`）中集合属性的名称。例如，`property="orderList"`。
+- **`ofType`**: **必需**。指定这个**集合中所包含元素的类型**的完整类名或别名。注意它和 `javaType` 的区别，`ofType` 指的是 `List<Order>` 中的 `Order` 类型
+
+
+
+###### 2.3 常用子元素
+
+- `<collection>` 标签内部的子元素，定义了**如何构建集合中每一个元素对象**（例如 `Order` 对象）的规则。其子元素与 `<association>` 完全一致
+
+  - **`<id>`**: 映射集合元素的**主键**属性。
+
+  - **`<result>`**: 映射集合元素的**普通**属性。
+
+  - **`<constructor>`**: 用于将列数据注入到集合元素的**构造方法**中。
+  - **`<association>`**: 用于映射集合中每个元素内部包含的“一对一”嵌套对象。
+  - **`<collection>`**: 用于映射集合中每个元素内部更深层次的“一对多”集合属性（虽然不常见，但支持）。
+
+  - **`<discriminator>`**: 鉴别器，用于处理集合中可能存在的不同子类型元素。
+
+
+
+###### 2.4 工作原理解析
+
+- 当 MyBatis 处理一对多查询的结果集时（通常会有多行属于同一个主对象）：
+
+  1. **处理第一行**:
+     - a. 根据主 `resultMap` 的 `<id>`（例如 `user_id`）判断这是一个新的主对象。
+     - b. 创建主对象实例（`new User()`）并填充其基础属性。 
+     - c. 创建一个新的集合实例（`new ArrayList<Order>()`）并赋给 `orderList` 属性。 
+     - d. 根据 `<collection>` 内部的规则，创建第一个集合元素（`new Order()`），填充数据，并将其添加到 `orderList` 中。
+  2. **处理后续行**
+     - a. MyBatis 会再次检查主 `resultMap` 的 `<id>` 值。如果 `user_id` 与上一行相同，它**不会**创建新的 `User` 对象。 
+     - b. 它会直接复用上一步创建的 `User` 对象。 
+     - c. 然后根据 `<collection>` 内部的规则，创建新的 `Order` 对象，填充数据，并将其添加到**已存在**的 `orderList` 集合中。
+  3. 这个过程会一直持续，直到遇到一个 `user_id` 不同的新行，才会重复步骤1。
+
+  >**核心**：主 `resultMap` 中的 `<id>` 标签是 MyBatis 能否正确识别和归并对象的关键。
+
+
+
+###### 2.5 完整示例
+
+- **Java 对象**:
+
+  ```java
+  public class User {
+      private Long id;
+      private String name;
+      private List<Order> orderList; // 关联的 Order 集合
+      // getters and setters...
+  }
+  public class Order {
+      private Long id;
+      private String orderNo;
+      // getters and setters...
+  }
+  ```
+
+- **XML Mapper 配置**:
+
+  ```xml
+  <resultMap id="userWithOrdersMap" type="User">
+      <!-- 映射 User 自身的基础属性 -->
+      <!-- 这个 <id> 至关重要，用于识别是否是同一个 User -->
+      <id property="id" column="user_id"/>
+      <result property="name" column="user_name"/>
+  
+      <!-- 定义如何映射 'orderList' 集合属性 -->
+      <collection property="orderList" ofType="Order">
+          <!-- 这里是构建 Order 对象并添加到 List 中的规则 -->
+          <id property="id" column="order_id"/>
+          <result property="orderNo" column="order_no"/>
+      </collection>
+  </resultMap>
+  
+  <select id="findUserWithOrders" resultMap="userWithOrdersMap">
+      SELECT
+          u.id as user_id,
+          u.name as user_name,
+          o.id as order_id,
+          o.order_no
+      FROM user u
+      LEFT JOIN orders o ON u.id = o.user_id
+      WHERE u.id = #{userId}
+  </select>
+  ```
 
 
 
@@ -1483,7 +1824,10 @@ public interface UserMapper {
 - **作用**：专门用于 `UPDATE` 语句的动态更新。它同样具备两大智能功能：
 
   1. 如果其包裹的内容**有输出**，它会自动添加 `SET` 关键字
+
   2. 它会自动**剔除**内容末尾多余的逗号 `,`
+
+     >**`<set>` 去除的是它所包裹内容中，最终生成的 SQL 语句末尾多余的逗号，跟这个逗号是不是在 `<if>` 标签里啊什么什么的完全无关。**
 
 - **典型场景：动态更新用户信息**
 
