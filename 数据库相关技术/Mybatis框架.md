@@ -695,6 +695,110 @@ public interface UserMapper {
 
 
 
+# MyBatis查询后在Java中的返回类型
+
+## `resultType` 和`resultMap`
+
+- 在 MyBatis 中，XML 映射文件里的 `resultType` (或 `resultMap`) 属性，其作用是**定义单行记录的封装类型**。
+  - 它并不决定整个查询结果最终的集合形态
+
+
+
+## 默认返回类型规则
+
+- MyBatis 根据 SQL 查询返回的**记录行数**以及 Mapper 接口方法的**返回类型签名**，智能地决定最终返回什么
+
+  1. **当查询结果为单行或零行时：**
+
+     - **默认行为**：返回一个**单个对象**。
+
+     - **类型**：这个对象的类型就是你在 `resultType` 中指定的类型（如 `User`, `Map<String, Object>`, `Integer` 等）。
+
+     - **注意**：如果查询结果为零行，MyBatis 会返回 `null`。为了避免空指针异常，推荐使用 Java 8 的 `Optional<T>` 来包装返回类型。
+
+       ```java
+       // 推荐做法
+       Optional<User> findById(int id);
+       ```
+
+     
+
+  2. **当查询结果为多行时：**
+
+     - **默认行为**：返回一个 `java.util.List` 集合。
+
+     - **集合内容**：这个 `List` 中包含的每一个元素，都是一个根据 `resultType` 封装好的 Java 对象。
+
+     - **示例**：
+
+       ```java
+       // Mapper 接口方法
+       List<User> findAll();
+       ```
+
+       ```xml
+       <select id="findAll" resultType="com.example.User">
+         SELECT * FROM user;
+       </select>
+       ```
+
+       - 在这里，`resultType` 告诉 MyBatis 每一行都是一个 `User` 对象，而方法签名 `List<User>` 告诉 MyBatis 把这些 `User` 对象装进一个 `List` 里再返回
+
+
+
+## 如何更改默认的集合类型
+
+- 如果你不想要默认的 `List`，**只需直接修改 Mapper 接口方法的返回类型签名**。MyBatis 会自动适应
+
+  - **改为 `Set`**：如果你需要一个不含重复元素的集合。
+
+    - **前提**：POJO 类（如 `User`）必须正确重写 `equals()` 和 `hashCode()` 方法。
+
+    - **示例**：
+
+      ```java
+      Set<User> findUniqueUsers();
+      ```
+
+  
+
+  - **改为数组 `[]`**：如果你需要一个数组。
+
+    - **示例**：
+
+      ```java
+      User[] findAllAsArray();
+      ```
+
+  
+
+  - **改为 `Map`**：如果你需要一个方便通过键查找的 `Map`。
+
+    - **前提**：必须配合 `@MapKey` 注解来指定用哪个属性作为键。
+
+    - **示例**：
+
+      ```java
+      @MapKey("id")
+      Map<Integer, User> findAllAsMap();
+      ```
+
+
+
+## 常见返回类型
+
+| 查询结果行数   | Mapper 方法返回类型  | 最终返回结果                                               |
+| :------------- | :------------------- | :--------------------------------------------------------- |
+| **单行或零行** | `User`               | 单个 `User` 对象或 `null`                                  |
+| **单行或零行** | `Optional<User>`     | 包含 `User` 的 `Optional` 或 `Optional.empty()`            |
+| **多行**       | `List<User>` (默认)  | 包含多个 `User` 对象的 `List`                              |
+| **多行**       | `Set<User>`          | 包含多个 `User` 对象的 `Set` (需重写 `equals`/`hashCode`)  |
+| **多行**       | `User[]`             | 包含多个 `User` 对象的数组                                 |
+| **多行**       | `Map<Integer, User>` | 以 `id` 为键，`User` 对象为值的 `Map` (需 `@MapKey("id")`) |
+| **多行**       | `Collection<User>`   | 包含多个 `User` 对象的 `Collection` (通常是 `ArrayList`)   |
+
+
+
 # Mapper XML详解
 
 - MyBatis 的核心魅力在于它能将 SQL 从业务逻辑中解耦出来，而 Mapper XML 文件正是承载这些 SQL 的核心工作区。
@@ -2106,7 +2210,7 @@ public interface UserMapper {
 
      
 
-# **注解开发**
+# 注解相关
 
 - 注解开发是 MyBatis 提供的另一种定义 SQL 映射的方式，它允许你直接在 Mapper 接口的方法上使用注解来编写 SQL 语句，从而替代 XML 文件。这种方式对于简单的 SQL 操作尤其方便，可以减少文件数量，让代码更内聚
 
@@ -2286,6 +2390,103 @@ public interface UserMapper {
   - `before = true`: **先执行`@SelectKey`的查询，再执行主SQL**。适用于需要先从序列（Sequence）或UUID函数获取ID，再将这个ID插入数据库的场景（如Oracle）。
   - `before = false`: **先执行主SQL，再执行`@SelectKey`的查询**。适用于需要通过特定函数（如MySQL的`LAST_INSERT_ID()`）来查询刚刚插入记录的ID的场景。
 - **`resultType`**: 指定`statement`查询返回结果的类型。通常是`Integer`, `Long`, `String`等。
+
+
+
+### @MapKey
+
+#### 核心定义
+
+- `@MapKey` 是 MyBatis 框架提供的一个注解，它的唯一功能是**充当一个数据结构转换器**。
+
+- 它能将一个原本应该返回 `List`(列表)的查询结果，自动转换成一个 `Map`（键值对集合）结构，极大地方便了后续的数据查找和处理
+
+
+
+#### 作用
+
+- `@MapKey` 的作用可以概括为一句话：**指定结果列表中的某个字段作为 `Map` 的键（Key）**
+
+
+
+#### 工作原理
+
+1. **执行查询**：MyBatis 首先执行你的 SQL 语句，从数据库获取一个结果列表（`List`）。
+   - *例如，一个 `List<User>`，其中每个 `User` 对象都有 `id`, `name`, `email` 等属性。*
+2. **遍历列表**：MyBatis 内部会遍历这个 `List` 中的每一个对象。
+3. **提取键值**：对于每一个对象，它会找到你在 `@MapKey` 注解中指定的那个属性（例如 `@MapKey("id")`），将该属性的值作为新 `Map` 的 **键**
+4. **封装对象**：原始的、完整的那个对象，则成为这个键所对应的 **值**。
+5. **返回 `Map`**：最终，整个 `List` 被转换成一个 `Map` 并返回
+
+
+
+**示例：**
+
+- 假设 SQL 查询返回的 `List` 如下：
+
+  ```json
+  [
+      { "id": 101, "name": "Alice", "role": "Admin" },
+      { "id": 108, "name": "Bob",   "role": "User"  },
+      { "id": 215, "name": "Carol", "role": "User"  }
+  ]
+  ```
+
+- 如果在 Mapper 方法上添加 `@MapKey("id")`，最终得到的结果将是这个 `Map`：
+
+  ```json
+  {
+      "101": { "id": 101, "name": "Alice", "role": "Admin" },
+      "108": { "id": 108, "name": "Bob",   "role": "User"  },
+      "215": { "id": 215, "name": "Carol", "role": "User"  }
+  }
+  ```
+
+
+
+#### **关键语法与注意事项**
+
+##### 知识点
+
+- 使用 `@MapKey` 时，最重要的一点是：**Mapper 接口方法的返回类型必须是 `Map`**。
+
+  - **注解**：`@MapKey("Java对象中准备作为键的属性名")`
+
+  - **返回类型**：`Map<KeyType, ValueType>`
+
+- 其中：
+
+  - `KeyType` 是你指定的键的类型（如 `Integer`, `Long`, `String`）。
+
+  - `ValueType` 是原始列表中每个元素的类型（如 `User`, `Map<String, Object>`）。
+
+
+
+##### 示例
+
+- **正确示例：**
+
+  ```java
+  // 使用 User 对象的 id (假设是 Long 类型) 作为 Key
+  @MapKey("id")
+  Map<Long, User> findAllUsersAsMap();
+  ```
+
+  
+
+- **错误示例：**
+
+  ```java
+  // 错误！返回类型不能是 List
+  @MapKey("id")
+  List<User> findAllUsersAsMap();
+  ```
+
+
+
+#### 特殊情况
+
+- 如果是在 XML 中使用 `resultType="java.util.Map"` 时，这里产生的 `Map` 对象的键是 **SQL 查询结果中的列名**，值是**这个列属性对应的值**
 
 
 
