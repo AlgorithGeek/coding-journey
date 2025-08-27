@@ -1177,13 +1177,187 @@
 
 ## 流程控制函数
 
-- 这些函数允许在 SQL 语句中实现条件逻辑
+- 在 SQL 查询中，流程控制函数允许我们根据特定条件执行不同的逻辑，从而实现更灵活和强大的数据处理。这类似于在编程语言中使用 `if-else` 或 `switch` 语句。MySQL 提供了几个非常有用的流程控制函数，下面我们来详细探讨。
 
-| 函数                   | 说明                                                 | 示例                                                         |
-| ---------------------- | ---------------------------------------------------- | ------------------------------------------------------------ |
-| **`IF(expr, v1, v2)`** | 如果表达式 `expr` 为真，则返回 `v1`，否则返回 `v2`。 | `SELECT IF(1 > 0, '是', '否');` <br>→ '是'                   |
-| **`IFNULL(v1, v2)`**   | 如果 `v1` 不为 `NULL`，则返回 `v1`，否则返回 `v2`。  | `SELECT IFNULL(NULL, '默认值');` <br>→ '默认值'              |
-| **`CASE ... END`**     | 标准的 `CASE` 表达式，用于实现更复杂的条件判断。     | `SELECT CASE 'B' WHEN 'A' THEN '优' WHEN 'B' THEN '良' ELSE '中' END;` <br>→ '良' |
+### IF(expr, v1, v2)
+
+- `IF()` 函数是一个基础的条件判断函数，可以看作是三元运算符的 SQL 版本。
+
+#### **语法解析：**
+
+- `expr`: 一个表达式，其结果将被判断为 `TRUE` 或 `FALSE`。
+- `v1`: 如果 `expr` 的结果为 `TRUE`，则函数返回该值。
+- `v2`: 如果 `expr` 的结果为 `FALSE`，则函数返回该值。
+
+`v1` 和 `v2` 的数据类型需要兼容。
+
+#### **使用场景：** 
+
+- 适用于简单的二选一逻辑判断，例如“是/否”、“通过/不通过”、“男/女”等。
+
+#### **示例：**
+
+1. **基础示例：** 判断 1 是否大于 0，如果是，返回 '是'，否则返回 '否'。
+
+   ```sql
+   SELECT IF(1 > 0, '是', '否');
+   -- 结果: '是'
+   ```
+
+2. **实际应用：** 假设我们有一个 `students` 表，包含 `student_name` 和 `score` 字段。我们想根据学生的分数是否及格（大于等于60分）来显示“及格”或“不及格”。
+
+   ```sql
+   -- 假设有如下数据：
+   -- student_name | score
+   -- '张三'         | 85
+   -- '李四'         | 52
+   
+   SELECT
+       student_name,
+       score,
+       IF(score >= 60, '及格', '不及格') AS status
+   FROM
+       students;
+   
+   -- 查询结果:
+   -- student_name | score | status
+   -- '张三'         | 85    | '及格'
+   -- '李四'         | 52    | '不及格'
+   ```
+
+
+
+### IFNULL(v1, v2)
+
+- `IFNULL()` 函数专门用于处理 `NULL` 值，当一个字段或表达式可能为 `NULL` 时，可以用它来提供一个默认值。
+
+#### **语法解析：**
+
+- `v1`: 需要检查是否为 `NULL` 的表达式。
+- `v2`: 如果 `v1` 的值为 `NULL`，则函数返回该值。如果 `v1` 不为 `NULL`，则函数返回 `v1` 自身。
+
+#### **使用场景：**
+
+- 在查询结果中，`NULL` 值通常不直观，使用 `IFNULL()` 可以将其替换为更有意义的文本，如“未提供”、“默认值”或 `0`，从而提高报表的可读性。
+
+#### **示例**
+
+1. **基础示例：** 检查一个值是否为 `NULL`，如果是，则返回 '默认值'。
+
+   ```
+   SELECT IFNULL(NULL, '默认值');
+   -- 结果: '默认值'
+   
+   SELECT IFNULL('Hello', '默认值');
+   -- 结果: 'Hello'
+   ```
+
+2. **实际应用：** 假设我们有一个 `products` 表，其中 `description` 字段允许为 `NULL`。当查询产品信息时，我们不希望描述显示为 `NULL`。
+
+   ```
+   -- 假设有如下数据：
+   -- product_name | description
+   -- '笔记本电脑'   | '高性能游戏本'
+   -- '鼠标'         | NULL
+   
+   SELECT
+       product_name,
+       IFNULL(description, '暂无描述') AS product_description
+   FROM
+       products;
+   
+   -- 查询结果:
+   -- product_name | product_description
+   -- '笔记本电脑'   | '高性能游戏本'
+   -- '鼠标'         | '暂无描述'
+   ```
+
+
+
+### CASE ... END
+
+- `CASE` 表达式是 SQL 中实现复杂条件逻辑的标准方式，比 `IF()` 函数更强大，可以处理多个条件分支。它有两种主要形式
+
+#### 1. 简单 CASE 表达式
+
+- 这种形式将一个表达式的值与一系列 `WHEN` 子句中的值进行比较
+
+##### **语法解析**
+
+```sql
+CASE case_value
+    WHEN when_value1 THEN result1
+    WHEN when_value2 THEN result2
+    ...
+    ELSE else_result
+END
+```
+
+- 它会计算 `case_value` 的值，然后依次与 `when_value1`, `when_value2` 等进行比较
+- 如果匹配成功，则返回对应的 `result`
+- 如果没有匹配成功，则返回 `ELSE` 子句中的 `else_result`。`ELSE` 是可选的，如果省略且没有匹配项，则返回 `NULL`
+
+
+
+##### **示例**
+
+- 根据用户的等级（level）显示不同的中文名称。
+
+```sql
+-- 假设有 users 表，包含 user_name 和 level (1, 2, 3)
+SELECT
+    user_name,
+    level,
+    CASE level
+        WHEN 1 THEN '初级会员'
+        WHEN 2 THEN '中级会员'
+        WHEN 3 THEN '高级会员'
+        ELSE '未知等级'
+    END AS level_name
+FROM
+    users;
+```
+
+
+
+#### 2. 搜索 CASE 表达式
+
+- 这种形式更灵活，它不依赖于单个值的比较，而是允许在每个 `WHEN` 子句中定义独立的布尔表达式
+
+##### **语法解析**
+
+```sql
+CASE
+    WHEN condition1 THEN result1
+    WHEN condition2 THEN result2
+    ...
+    ELSE else_result
+END
+```
+
+- 它会依次评估 `condition1`, `condition2` 等条件。
+- 返回第一个为 `TRUE` 的条件所对应的 `result`。
+- 如果所有条件都不为 `TRUE`，则返回 `ELSE` 子句中的 `else_result`。
+
+##### **示例**
+
+- 根据学生的分数范围来评定等级：优秀、良好、及格、不及格。
+
+```sql
+SELECT
+    student_name,
+    score,
+    CASE
+        WHEN score >= 90 THEN '优秀'
+        WHEN score >= 80 THEN '良好'
+        WHEN score >= 60 THEN '及格'
+        ELSE '不及格'
+    END AS grade
+FROM
+    students;
+```
+
+- 这个例子就无法用简单的 `IF()` 函数直接实现，充分体现了 `CASE` 表达式的强大之处。
 
 
 
