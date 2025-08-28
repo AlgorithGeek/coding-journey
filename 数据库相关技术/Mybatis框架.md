@@ -2494,7 +2494,7 @@ public interface UserMapper {
 
 - 对于动态 SQL，注解提供了两种方式：使用 `<script>` 标签（推荐）和使用 `Provider` 类
 
-### **3.1 使用 `<script>` 标签 (推荐)**
+### 使用 `<script>` 标签 (推荐)
 
 - 对于中等复杂度的动态 SQL，可以直接在注解的 SQL 字符串中使用 `<script>` 标签来包裹动态 SQL 元素，语法和 XML 中完全一样
 
@@ -2532,7 +2532,7 @@ public interface UserMapper {
 
 
 
-### **3.2 使用 `Provider` 类 (用于非常复杂的 SQL)**
+### 使用 `Provider` 类(非常复杂的SQL)
 
 - 对于极其复杂的动态 SQL，为了保持接口的整洁，可以将其逻辑抽取到一个单独的 `Provider` 类中
 
