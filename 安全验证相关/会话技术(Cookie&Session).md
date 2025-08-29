@@ -114,7 +114,7 @@
 
 ## SpringBoot中操作Cookie
 
-- 在 SpringBoot 的 Controller 中，我们可以很方便地通过 `HttpServletRequest` 和 `HttpServletResponse` 来操作 Cookie。
+- 在 SpringBoot 的 Controller 中，我们可以很方便地通过 `HttpServletRequest` 和 `HttpServletResponse` 来操作 Cookie
 
 ### 1. 创建和发送 Cookie
 
@@ -272,6 +272,8 @@ public class CookieController {
     之后，浏览器在每次向该服务器发送请求时，都会自动带上这个 Session ID。
     服务器根据接收到的 Session ID，就能找到对应的 Session 对象，从而识别出用户身份和状态
 - **Session 机制通常依赖于 Cookie 来实现**
+
+> 它发的只是Session ID
 
 
 
