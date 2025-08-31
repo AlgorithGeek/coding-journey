@@ -11667,7 +11667,7 @@ if (showInfoMethod.isAnnotationPresent(MyInfo.class)) {
     |              | 代理模式                                                     | 装饰器模式                                                   |
     | ------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
     | 核心意图     | 控制访问                                                     | 增强功能                                                     |
-    | 关注点       | 关注**过程**。代理不关心目标对象的功能是什么，它只关心在调用这个功能**前后**，它需要做什么控制（如权限、缓存、网络连接）。 | 关注**内容**。装饰器就是为了给目标对象**添加新的、额外的功能**，让它变得更强大。 |
+    | 关注点       | 关注**过程**。代理不关心目标对象的功能是什么，它只关心在调用这个功能**前后**，它需要做什么控制（如权限、缓存、网络连接） | 关注**内容**。装饰器就是为了给目标对象**添加新的、额外的功能**，让它变得更强大。 |
     | 与目标的关系 | 代理类和真实类在功能上通常是**一对一**的。一个代理类通常只代理一种类型的对象。 | 装饰器和真实类可以**自由组合、层层包裹**。一个对象可以被一个或多个不同的装饰器动态地、任意地增强。 |
     | 对客户端     | 代理对客户端是**透明的**。客户端通常不知道自己在使用代理，它以为自己直接在和真实对象交互。 | 装饰器对客户端**通常不是透明的**。客户端需要主动地用装饰器去“包装”一个对象，以获得增强后的功能。 |
 
@@ -11675,12 +11675,16 @@ if (showInfoMethod.isAnnotationPresent(MyInfo.class)) {
 
     - 代理模式的**“添加功能”**，很多时候是它在完成自己“核心使命”时的一种**自然结果或附带效应**，而不是它的出发点
 
+
+
 ### 静态代理
 
 - 在动态代理出现之前，我们只能手动编写代理类，我们称之为**“静态代理”**
 - 静态代理**不修改原始代码**，而是通过**新增一个代理类**，让这个新类**实现**与目标类相同的接口（或**继承**目标类）。在这个新类的方法中，我们可以自由地**添加**各种增强逻辑，同时在内部**包裹并调用**原始目标对象来完成核心任务。整个过程，原始代码保持不变。
 - **静态代理的特点**：代理类是在**编译时**就已经创建好的，它的**`.class`文件**是实实在在存在于硬盘上的
 - 缺点：代码冗余、不易维护
+
+
 
 ### 动态代理
 
@@ -11698,7 +11702,7 @@ if (showInfoMethod.isAnnotationPresent(MyInfo.class)) {
 - 代理类不是我们手动编写的，而是在**程序运行时**，由JVM根据我们提供的信息**动态生成**的。它没有**`.java`源文件**，直接在内存中生成**`.class`字节码**
 - 非常灵活，可以为任意接口的实现类生成代理，极大地减少了代码量，实现了业务逻辑与非业务逻辑（如日志、事务）的解耦
 - 动态代理**不能**直接**“伸入”到原始方法内部更改内部逻辑**，但是**可以重写整个逻辑**
-- 在获取类加载器时，使用**`被代理的对象名.getClass().getClassLoader()`**比**`代理的接口名.class.getClassLoader()`**更具普适性。因为这能确保代理类和**被代理的目标实例**使用同一个类加载器，这在更复杂的类加载环境中（比如OSGi或某些插件化框架）会更健壮
+- 在获取类加载器时，使用**`被代理的对象名.getClass().getClassLoader()`** 比 **`代理的接口名.class.getClassLoader()`**更具普适性。因为这能确保代理类和**被代理的目标实例**使用同一个类加载器，这在更复杂的类加载环境中会更健壮
 
 
 
@@ -11706,7 +11710,8 @@ if (showInfoMethod.isAnnotationPresent(MyInfo.class)) {
 
 ##### **`java.lang.reflect.Proxy`代理类**
 
-- 这是一个**工厂类**，专门用来创建代理对象。最核心的方法是 **`newProxyInstance(ClassLoader loader, Class<?>[] interfaces, InvocationHandler h)`**
+- 这是一个**工厂类**，专门用来创建代理对象。最核心的方法是 
+  **`newProxyInstance(ClassLoader loader, Class<?>[] interfaces, InvocationHandler h)`**
 
   ```java
   public static Object newProxyInstance(ClassLoader loader, Class<?>[] interfaces, InvocationHandler h)
@@ -11722,7 +11727,7 @@ if (showInfoMethod.isAnnotationPresent(MyInfo.class)) {
 
 
 
-##### **`java.lang.reflect.InvocationHandler`调用处理器**
+##### **`java.lang.reflect.InvocationHandler`调用处理器** 接口
 
 - 这是一个**接口**，只包含一个方法 **`invoke(Object proxy, Method method, Object[] args)`**。
 
@@ -11736,13 +11741,13 @@ if (showInfoMethod.isAnnotationPresent(MyInfo.class)) {
 
   
 
-- 当我们调用代理对象的**任何方法**时，这个调用都会被拦截下来，转而执行**`InvocationHandler`**的**`invoke`**方法。
+- 当我们调用代理对象的**任何方法**时，这个调用都会被拦截下来，转而执行**`InvocationHandler`**的**`invoke`**方法
 
 - **参数详解**：
 
   - **`proxy`**: 动态生成的那个代理对象本身。**Java运行时系统自动传入的、最终创建好的那个代理对象实例**
-  - **`method`**: 被调用的方法对象（**`Method`类**的实例），比如**`addUser`**方法。
-  - **`args`**: 调用方法时传入的参数数组。
+  - **`method`**: 被调用的方法对象（**`Method`类**的实例），比如**`addUser`**方法
+  - **`args`**: 调用方法时传入的参数数组
 
   
 
@@ -11816,6 +11821,27 @@ public class BigStar implements Star {
 
   - 可以写匿名内部类，也可以标准普通写
 
+    > **`java.lang.reflect.Proxy`代理类**
+    >
+    > ```java
+    > public static Object newProxyInstance
+    > 						(ClassLoader loader, Class<?>[] interfaces, InvocationHandler h)
+    > 				//返回一个代理类的实例，该代理类会自动实现我们指定的接口数组(即第二个参数)中的所有接口，
+    >     			//并将方法调用分派给指定的调用处理器 h
+    > ```
+    >
+    > **`java.lang.reflect.InvocationHandler`调用处理器** 接口
+    >
+    > ```java
+    > public Object 		invoke(Object proxy, Method method, Object[] args)
+    > 						// 处理代理实例上的方法调用并返回结果。这是实现所有代理逻辑的核心方法。
+    > 						// proxy: 调用该方法的代理实例。Java运行时系统自动传入的、最终创建好的那个代理对象实例
+    > 						// method: 被调用的 Method 实例。
+    > 						// args: 传递给方法的参数数组；如果方法没有参数，则为 null。
+    > ```
+    
+    
+    
     ```java
     public static Star createProxy(BigStar bg) throws Exception {
         Star s = (Star) Proxy.newProxyInstance(//调用Proxy实例化一个代理类的对象，
@@ -11842,7 +11868,7 @@ public class BigStar implements Star {
         return s;//方法返回一个Star代理类的实例
     }
     ```
-
+    
     
 
 ## 相关类与体系

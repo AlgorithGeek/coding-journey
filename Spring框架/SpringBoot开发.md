@@ -2137,6 +2137,1314 @@ logging:
 
 
 
+# AOP
+
+## 好理解
+
+**AOP感觉非常不好理解，好，我们现在来写一个牛逼的理解**
+
+> 其实最主要的是先理解怎么切，概念中总是提到的“横切”，“纵切“什么的：
+>
+> 首先明确一点：我们的三层架构的项目是纵向的，然后最上面是controller，中间是service，最下面是mapper
+>
+> 之后再说一点，在这个纵向排列的流程中，有很多地方都可以进行“切”，也就是“侵入”，也就是插入某些代码，
+> 这些所有可以切的地方，我们称之为”连接点“。
+>
+> 然后我们具体在哪些地方切呢？总不能所有可以“切”的地方都“切“吧，那我们就要“筛选“了，怎么“筛选”呢，“筛选规则”是什么？
+> 这里的这个“筛选规则”我们就称之为“切点”
+>
+> 筛选完成之后，我门在那些”筛选之后的连接点“上，要写我们的代码，这些代码，我们称为“通知”
+>
+> 因为“连接点”是一个客观的，已经存在的东西，他们已经存在于原始的代码长河中了
+> 我们现在的新东西是什么？我们的新东西是我们创建的“筛选规则”（切点）和我们写的要执行的“代码”（通知）
+> 那这两样东西在哪？
+> 当然在代码中啊，我们会基于什么职责啊、封装啊、模块化啊啥的思想，最后选择使用一个 Java类 把他们放到一起，
+> 这个 Java类(通常就是一个被 `@Aspect` 注解的 Java 类) 我们称为“切面”
+>
+>
+> 那这个“连接点”原来在哪个类中呢？哦好像是某个业务逻辑类，这个原始业务逻辑类的实例对象我们叫他“目标对象”，以前我们在三层架构中就是用这个对象进行调用业务逻辑层的方法的
+>
+> 我们现在要自然而然，顺利成章的使用这些新功能("通知")和原来的功能("原来的代码逻辑")结合到一起的豪华功能，
+> 那我们就要进行“织入”，即把他们进行组合，形成一个具有新的代码逻辑的对象
+>
+> 这个对象是什么？我们称之为 AOP 代理！
+
+
+
+## AOP 概念
+
+### 基本概念
+
+- AOP 是一种编程思想，它允许程序员对**横切关注点(Cross-Cutting Concerns)**进行模块化。
+  - **”横切关注点“**就是那些**分散在系统各个模块中，但又不属于任何一个模块核心业务功能的通用功能**
+  - 换句话说，就是将那些与核心业务逻辑无关，但又散布在多个业务模块中的代码（如日志、安全、事务）抽取出来，形成一个独立的“切面”，再在需要的时候动态地“织入”到业务逻辑中
+
+
+
+- **核心优势**：
+
+  - **降低模块间耦合度**：业务代码只需关注自身逻辑，无需关心通用功能的实现
+
+  - **提高代码复用性**：通用的功能（如日志）只需写一次，即可应用到任何需要的地方
+
+  - **增强代码可维护性**：修改通用功能时，只需修改切面代码，无需改动大量业务代码
+
+
+
+### 术语详解
+
+#### 1. 切面 (Aspect)
+
+- **是什么**
+
+  - 一个模块，它封装了特定的横切关注点（比如日志、事务、权限）。可以把它想象成一个“功能插件包”
+  - 上面是专业化的术语概念，**实际上它就是一个”切点“和”通知“组成的 Java 类，没啥难理解的**
+
+- **深入理解**：
+
+  - 切面是 **“做什么”** 和 **“在哪里做”** 的结合体
+    - **做什么**：
+      - 由**通知 (Advice)** 来定义，即具体要执行的通用功能代码
+    - **在哪里做**：
+      - 由**切点 (Pointcut)** 来定义，即在哪些方法的什么时机来执行
+
+- **在 Spring 中**：
+
+  - **是一个带有 `@Aspect` 注解的 Java 类**。这个类本身就是一个高度内聚的模块，专门负责处理一个特定的通用功能
+
+    > 不能神略这个注解：`@Aspect` 是一个标记注解，它告诉 Spring 的 AOP 框架，需要解析这个类中定义的切点（Pointcut）和通知（Advice，如 `@Before`, `@After`, `@Around` 等
+
+    - **注意**：这个切面类要加上`@Component`注解，把它交给SpringBoot管理
+
+
+
+#### 2. 连接点 (JoinPoint)
+
+- **是什么**：
+  - 程序执行过程中的一个**可以被拦截的特定时间点或位置**
+  - 可以“切”的所有地方的集合
+- **深入理解**：
+  - 理论上，程序中处处是连接点。比如：
+    - 方法的调用或执行(**Spring AOP 主要支持的类型**)
+    - 字段的读取或修改
+    - 构造函数的调用
+    - 异常的抛出
+- **在 Spring 中**：
+  - 为了保持简单和高效，Spring AOP **只支持方法执行连接点**
+    - 也就是说，你只能在你的业务方法**执行时**动态地织入代码，不能在读取某个字段时做文章
+    - 这已经能满足绝大多数应用场景
+
+
+
+#### 3. 切点 (Pointcut)
+
+- **是什么**：
+
+  - 一个**筛选规则**，它精确地定义了切面将在哪些连接点上生效
+  - 用来“筛选”连接点
+
+- **深入理解**：
+
+  - 如果说连接点是程序里所有方法的集合，那么切点就是你的**“筛选条件”**（就像 SQL 的 `WHERE` 子句），用来筛选出你想要增强的那些方法。
+  - 这个筛选规则通常用一段表达式来描述
+
+- 为什么变奇怪了
+
+  - 从中文的字面意思上看，“连接**点**”和“切**点**”都带一个“点”，理应都是指某个具体的位置。但 AOP 的定义却偏偏不是这样
+
+    这个术语是从英文 **Pointcut** 直接翻译过来的
+    在英文里，它是一个复合词，我们可以理解为 **"a specification for a cut"**，即**“一个关于‘切’的定义或规范”**
+    它描述不是一个**静态的位置**
+    而**连接点**在英文中是 **Join Point**，描述的就是一个**静态的位置**
+
+    但翻译成中文后，因为**“点”**这个静态位置的概念，引起了混淆，**所以感觉哎呀名字差不多怎么变得这么奇怪**
+
+- **在 Spring 中**：
+
+  - 使用 AspectJ 的切点表达式语言来定义，例如 `execution(* com.example.service.*.*(..))`
+
+
+
+#### 4. 通知 (Advice)
+
+- **是什么**：
+  - 在切面所指定的切点上**具体要执行的代码**
+  - 自己写的切点上执行的代码
+- **深入理解**：
+  - 通知就是切面这个“功能插件包”里**真正的业务逻辑**。它定义了你要织入的代码到底是什么，比如“打印一行日志”、“开启一个事务”或者“校验用户权限”
+- **在 Spring 中**：
+  - 通常是切面类中的一个方法，并使用 `@Before`, `@After`, `@Around` 等注解来标识它的执行时机
+  - 切面类中负责执行具体逻辑的“通知方法”（`@Before`, `@Around` 等），推荐使用 `private` 修饰符
+
+
+
+#### 5. 目标对象 (Target Object)
+
+- **是什么**：
+  - 被一个或多个切面所“通知”的对象，也就是包含我们核心业务逻辑的那个原始对象
+  - 原来代码所处类的实例对象
+- **深入理解**：
+  - 这是你亲手编写的、最纯粹的业务类，比如 `UserServiceImpl`。
+    它本身并不知道 AOP 的存在，只专注于自己的业务。
+    AOP 要做的就是不修改它的源码，但又能给它增加新功能
+
+
+
+#### 6. AOP 代理 (AOP Proxy)
+
+- **是什么**：
+  - AOP 框架在运行时创建的一个**代理对象**，用于实现切面逻辑。
+  - 也就是”织入“操作产生的结果对象
+- **深入理解**：
+  - 既然不能修改目标对象的源码，那如何给它增加功能呢？
+    答案就是创建一个“替身”——代理对象。
+    这个代理对象对外表现得和目标对象一模一样，但内部却动了手脚。
+    当外部代码调用代理对象的方法时，代理对象会先执行切面中的通知代码，然后再去调用原始目标对象的方法。
+    我们与之交互的，实际上是这个代理。
+- **在 Spring 中**：
+  - Spring AOP 默认使用两种代理技术：
+    - **JDK 动态代理**：如果目标对象**实现了接口**，Spring 就使用 JDK 自带的动态代理技术来创建代理。代理对象和目标对象都实现相同的接口
+    - **CGLIB 代理**：如果目标对象**没有实现接口**，Spring 就使用 CGLIB 这个第三方库，通过**创建目标对象的子类**来作为代理
+
+
+
+#### 7. 织入 (Weaving)
+
+- **是什么**：
+  - 将切面应用到目标对象上，从而**创建出 AOP 代理对象的这个过程**
+  - 合并原来逻辑和新逻辑的过程
+- **深入理解**：
+  - “织入”是一个动词，描述的是把“切面”这个功能插件安装到“目标对象”身上，最终生成“AOP 代理”的整个动作
+- **织入的几种时机**：
+  - **编译时织入**：在代码编译成 `.class` 文件时就把切面代码嵌进去。
+  - **类加载时织入**：在 JVM 加载 `.class` 文件时进行增强。
+  - **运行时织入**：在程序运行期间，当需要用到 Bean 时才动态地创建代理对象。
+    - **Spring AOP 采用的就是这种方式**，这也是最灵活的方式
+
+
+
+## AOP 中的通知类型
+
+- Spring AOP 提供了 5 种通知类型，它们定义了你的代码在连接点（方法执行）的哪个时刻被触发
+
+
+
+### 1. `@Before` (前置通知)
+
+- **执行时机**：在目标方法**执行之前**执行
+
+- **特点**：
+
+  - 无法阻止目标方法的执行（除非它自己抛出异常）
+  - 可以获取到目标方法的参数信息
+
+- **应用场景**：参数校验、权限检查、日志记录等
+
+- 示例
+
+  ```JAVA
+  @Before("execution(* com.example.service.CalculatorService.add(..))")
+  public void logBefore(JoinPoint joinPoint) {
+      // 获取方法签名
+      String methodName = joinPoint.getSignature().getName();
+      // 获取参数
+      Object[] args = joinPoint.getArgs();
+      System.out.println("【@Before 前置通知】：" + methodName + " 方法即将执行，参数为：" + Arrays.toString(args));
+  }
+  ```
+
+  
+
+
+
+### 2. `@AfterReturning` (返知)
+
+- **执行时机**：在目标方法**成功执行并返回结果之后**执行。如果方法抛出异常，则不会执行。
+
+  - 唯一有可能不运行的也只有这个和另外一个After开头的注解
+
+- **特点**：
+
+  - 可以获取到方法的返回值。
+
+- **应用场景**：记录方法返回值日志、对返回值进行二次处理等。
+
+- 示例
+
+  ```JAVA
+  // returning = "result" 指定将返回值注入到名为 result 的参数中
+  @AfterReturning(
+      value = "execution(* com.example.service.CalculatorService.add(..))",
+      returning = "result"
+  )
+  public void logAfterReturning(JoinPoint joinPoint, Object result) {
+      String methodName = joinPoint.getSignature().getName();
+      System.out.println("【@AfterReturning 返回通知】：" + methodName + " 方法成功执行，返回值为：" + result);
+  }
+  ```
+
+
+
+### 3. `@AfterThrowing` (异常通知)
+
+- **执行时机**：在目标方法**抛出异常之后**执行。如果方法正常返回，则不会执行。
+
+  - 唯一有可能不运行的也只有这个和另外一个After开头的注解
+
+- **特点**：
+
+  - 可以获取到抛出的异常对象。
+
+- **应用场景**：记录异常日志、发送异常警报、进行事务回滚等。
+
+- 示例
+
+  ```JAVA
+  // throwing = "exception" 指定将抛出的异常注入到名为 exception 的参数中
+  @AfterThrowing(
+      value = "execution(* com.example.service.CalculatorService.add(..))",
+      throwing = "exception"
+  )
+  public void logAfterThrowing(JoinPoint joinPoint, Exception exception) {
+      String methodName = joinPoint.getSignature().getName();
+      System.out.println("【@AfterThrowing 异常通知】：" + methodName + " 方法抛出异常，异常信息为：" + exception.getMessage());
+  }
+  ```
+
+  
+
+
+
+### 4. `@After` (后置通知)
+
+- **执行时机**：**无论**目标方法是正常返回还是抛出异常，它**总是**在目标方法执行之后执行
+
+  - 另外的那两个After开头的注解都在这个注解之前运行，并且唯一有可能不运行的也只有它们二者
+
+- **特点**：
+
+  - 类似于 `try-catch-finally` 语句中的 `finally` 块
+  - 无法获取到方法的返回值或异常信息，因为它不知道方法是成功还是失败
+
+- **应用场景**：释放资源、关闭连接等最终清理工作。
+
+- 示例
+
+  ```JAVA
+  @After("execution(* com.example.service.CalculatorService.add(..))")
+  public void logAfter(JoinPoint joinPoint) {
+      String methodName = joinPoint.getSignature().getName();
+      System.out.println("【@After 后置通知】：" + methodName + " 方法最终执行完毕。");
+  }
+  ```
+
+  
+
+
+
+### 5. `@Around` (环绕通知)
+
+#### 基本概念
+
+- **执行时机**：**包裹**在目标方法调用的前后，是所有通知类型中功能最强大的
+
+- **特点**：
+
+  - 可以自由地在目标方法执行前后添加逻辑
+  - 可以决定目标方法**是否执行**、**何时执行**
+  - 可以**改变**目标方法的**参数**和**返回值**
+  - 必须手动调用 `ProceedingJoinPoint.proceed()` 来执行目标方法
+    - **`proceed()` 方法是 `@Around` 环绕通知独有的、至高无上的特权。** 这种设计是 AOP 框架为了保证逻辑清晰和功能划分而刻意为之的
+      - 这个方法在别的注解标注的方法中无法使用
+    - 如果 `@Around` 通知中没有调用 `proceed()` 方法，那么：
+      - 不仅是目标方法本身，**包括 `@Before`、`@After`、`@AfterReturning` 和 `@AfterThrowing` 在内的所有其他通知，都将不会被执行**
+
+- **应用场景**：性能监控、事务管理、缓存等
+
+- 示例
+
+  ```JAVA
+  @Around("execution(* com.example.service.CalculatorService.add(..))")
+  public Object measureExecutionTime(ProceedingJoinPoint pjp) throws Throwable {
+      System.out.println("【@Around 环绕通知】 - 进入方法");
+      long startTime = System.currentTimeMillis();
+  
+      // 手动调用目标方法
+      Object result = pjp.proceed();
+  
+      long endTime = System.currentTimeMillis();
+      System.out.println("【@Around 环绕通知】 - 退出方法");
+      System.out.println("方法执行耗时: " + (endTime - startTime) + "ms");
+  
+      // 可以修改返回值
+      // return (Integer)result * 2;
+      return result;
+  }
+  ```
+
+
+
+#### @Around 的“前后包裹”
+
+- 一个常见的误区如下：
+
+  - 既然 `@Around` 环绕通知的功能覆盖了目标方法执行的“之前”和“之后”，那么这个通知方法本身是不是会被执行两次？
+
+    - **答案是否定的。@Around 通知方法从始至终只会被完整地调用一次。**
+
+    - 它之所以能实现“前后包裹”的效果，其核心机制是**“流程暂停与恢复”**，而不是“重复执行”。我们可以把 `@Around` 方法的执行过程理解为一个包含了“暂停点”的线性流程
+
+
+
+##### 核心枢纽：`pjp.proceed()`
+
+- `@Around` 通知的“魔法”完全来自于 `ProceedingJoinPoint` 接口中的 `proceed()` 方法。这个方法扮演了**“流程暂停与移交控制器”**的角色.
+
+- 当程序执行到 `pjp.proceed()` 这一行时，`@Around` 方法并不会立即结束，而是会像按下了“暂停键”一样，将CPU的执行权暂时“借给”内部的调用链（包括 `@Before` 通知和目标方法等）
+
+
+
+##### 执行流程分解
+
+- 我们可以将一个 `@Around` 通知的完整生命周期分解为以下几个步骤：
+  1. **进入通知**：
+     - 外部调用触发，程序执行流**第一次**进入 `@Around` 通知方法的内部。
+  2. **执行“前置”逻辑**：
+     - 在 `pjp.proceed()` **之前**的所有代码被顺序执行。这里就是我们实现自定义“前置功能”的地方。
+  3. **暂停并移交控制权**：
+     - 程序执行到 `pjp.proceed()`。
+     - 此时，`@Around` 方法的执行流**在此处暂停**，并将控制权移交给下一环（通常是 `@Before` 通知，然后是目标方法）
+       - 此处的顺序详见”通知的执行顺序“小节
+  4. **等待内部流程执行完毕**：
+     - `@Around` 方法会静静地等待，直到被它调用的内部流程（包括目标方法、`@After` 等）全部执行结束。
+  5. **恢复并继续执行**：
+     - 当内部流程执行完毕后，控制权会**返回**到 `pjp.proceed()` 被调用的地方。
+     - 程序就像按下了“继续播放”键，开始执行 `pjp.proceed()` **之后**的所有代码。这里就是我们实现自定义“后置功能”的地方。
+  6. **退出通知**：
+     - `@Around` 方法的所有代码执行完毕，将最终结果返回给调用方，整个 AOP 流程结束。
+
+
+
+##### 代码与流程的对应关系
+
+```java
+@Around("yourPointcut()")
+public Object aroundAdviceExample(ProceedingJoinPoint pjp) throws Throwable {
+    
+    // 步骤 1 & 2: 进入通知，执行“前置”逻辑
+    System.out.println("--- @Around: 前置逻辑开始 ---");
+    long startTime = System.currentTimeMillis();
+
+    // 步骤 3 & 4: 在此暂停，移交控制权并等待
+    Object result = pjp.proceed(); 
+
+    // 步骤 5: 内部流程结束，恢复执行“后置”逻辑
+    long endTime = System.currentTimeMillis();
+    System.out.println("--- @Around: 后置逻辑开始, 耗时: " + (endTime - startTime) + "ms ---");
+
+    // 步骤 6: 退出通知，返回结果
+    return result;
+}
+```
+
+- 通过这个流程分解，我们可以清晰地看到，`@Around` 方法的实现方式是**“包裹”**和**“暂停/恢复”**，而不是“执行两次”。
+  - 它以一个更强大、更灵活的方式，实现了对目标方法调用的完全控制。
+
+
+
+### 通知的执行顺序
+
+- 理解五种通知（Advice）的执行顺序是掌握 AOP 的关键。我们可以把整个调用过程想象成一个“洋葱模型”或者“俄罗斯套娃”，`@Around` 是最外层，目标方法的执行在最核心
+
+
+- 整个调用链的核心枢纽是 `@Around` 通知中的 `ProceedingJoinPoint.proceed()` 方法，它就像一个“开关”，负责将执行权传递给下一层
+
+
+#### 场景一：目标方法正常执行
+
+- 在这种情况下，整个调用链会像一个完美的 V 形，顺利地“进去”再“出来”
+
+
+##### 1. 图解调用流程
+
+- 我们可以把执行流程想象成一个层层包裹的结构：
+
+  ```CMD
+  +-----------------------------------------------------------------------------+
+  | @Around (环绕通知) - Part 1: proceed() 之前                                   |
+  |                                                                             |
+  |   +-------------------------------------------------------------------------+
+  |   | @Before (前置通知)                                                       |
+  |   |                                                                         |
+  |   |   +---------------------------------------------------------------------+
+  |   |   |                                                                     |
+  |   |   |                  目标方法执行 (Target Method)                         |
+  |   |   |                                                                     |
+  |   |   +---------------------------------------------------------------------+
+  |   |                                                                         |
+  |   +-------------------------------------------------------------------------+
+  |                                                                             |
+  |   (这里是 proceed() 方法返回的地方)                                             |
+  |                                                                             |
+  |   +-------------------------------------------------------------------------+
+  |   | @AfterReturning (返回通知)                                               |
+  |   +-------------------------------------------------------------------------+
+  |                                                                             |
+  |   +-------------------------------------------------------------------------+
+  |   | @After (后置通知) - finally 块                                            |
+  |   +-------------------------------------------------------------------------+
+  |                                                                             |
+  | @Around (环绕通知) - Part 2: proceed() 之后                                   |
+  |                                                                             |
+  +-----------------------------------------------------------------------------+
+  ```
+
+  
+
+##### 2. 详细步骤分解
+
+1. **进入最外层**: 调用开始，首先进入 `@Around` 环绕通知的前半部分（`proceed()` 之前）。
+2. **向内执行**: `@Around` 执行 `pjp.proceed()`，将控制权交给下一层。
+3. **执行前置**: `@Before` 前置通知被触发。
+4. **执行核心**: `@Before` 执行完毕，轮到**目标方法** (`CalculatorService.add()`) 执行。
+5. **核心执行完毕**: 目标方法成功计算出结果并 `return`。
+6. **向外返回 (成功路径)**:
+   - 首先，`@AfterReturning` 返回通知被触发，因为方法是**正常返回**的。
+   - 然后，`@After` 后置通知被触发，因为它总会执行（类似 `finally`）。
+7. **回到最外层**: 执行权返回到 `@Around` 通知中 `pjp.proceed()` 的下一行代码，`@Around` 的后半部分得以执行。
+8. **调用结束**: `@Around` 返回最终结果。
+
+
+
+##### 3. 最终输出顺序
+
+```CMD
+【@Around 环绕通知】 - 进入方法
+【@Before 前置通知】：add 方法即将执行...
+正在执行核心业务逻辑：add 方法...
+【@Around 环绕通知】 - 退出方法 (在 proceed() 之后)
+【@AfterReturning 返回通知】：add 方法成功执行，返回值为...
+【@After 后置通知】：add 方法最终执行完毕。
+```
+
+
+
+#### 场景二：目标方法抛出异常
+
+- 当目标方法内部出现异常时，调用链会“抄近路”直接进入异常处理路径
+
+
+##### 1. 图解调用流程
+
+```CMD
++-----------------------------------------------------------------------------+
+| @Around (环绕通知) - try-catch 块                                             |
+|                                                                             |
+|   try {                                                                     |
+|       // proceed() 之前的代码执行
+|                                                                             |
+|       +---------------------------------------------------------------------+
+|       | @Before (前置通知)                                                   |
+|       |                                                                     |
+|       |   +-----------------------------------------------------------------+
+|       |   |                                                                 |
+|       |   |            目标方法执行 (Target Method) -> 抛出异常!               |
+|       |   |                                                                 |
+|       |   +-----------------------------------------------------------------+
+|       |                                                                     |
+|       // @Around 的后半部分 和 @AfterReturning 都不会被执行了！
+|       |                                                                     |
+|   } catch (Exception e) {                                                   |
+|       // 异常被 AOP 框架捕获                                                  |
+|   } finally {                                                               |
+|       // 无论如何都会执行                                                      |
+|   }                                                                         |
+|                                                                             |
+|   +-------------------------------------------------------------------------+
+|   | @AfterThrowing (异常通知)                                                |
+|   +-------------------------------------------------------------------------+
+|                                                                             |
+|   +-------------------------------------------------------------------------+
+|   | @After (后置通知) - finally 块                                            |
+|   +-------------------------------------------------------------------------+
+|                                                                             |
++-----------------------------------------------------------------------------+
+```
+
+
+
+##### 2. 详细步骤分解
+
+1. **进入最外层**: 同上，首先进入 `@Around` 环绕通知的前半部分。
+2. **向内执行**: `@Around` 执行 `pjp.proceed()`。
+3. **执行前置**: `@Before` 前置通知被触发。
+4. **执行核心**: `@Before` 执行完毕，**目标方法**开始执行。
+5. **异常发生**: 目标方法在执行过程中**抛出了一个异常**。
+6. **进入异常路径**:
+   - 异常被抛出后，AOP 框架会捕获它。
+   - `@AfterReturning` **不会**被执行，因为它只在**成功返回**时触发。
+   - `@Around` 中 `pjp.proceed()` 后面的代码也**不会**被执行。
+   - `@AfterThrowing` 异常通知被触发，因为有异常发生。
+   - 最后，`@After` 后置通知依然会被触发，因为它保证了**总会执行**。
+7. **异常冒泡**: 如果 `@AfterThrowing` 或 `@Around` 没有捕获并处理掉这个异常，它会继续向外抛出，最终导致调用失败。
+
+
+
+##### 3. 最终输出顺序
+
+```CMD
+【@Around 环绕通知】 - 进入方法
+【@Before 前置通知】：add 方法即将执行...
+正在执行核心业务逻辑：add 方法...
+【@AfterThrowing 异常通知】：add 方法抛出异常，异常信息为...
+【@After 后置通知】：add 方法最终执行完毕。
+(程序向上抛出未捕获的异常)
+```
+
+
+
+### 多切面匹配执行顺序
+
+- 当一个目标方法（连接点）同时被多个切面（Aspect）的切点表达式匹配中时，这些切面都会被应用到该方法上。
+  - 那么，它们的执行顺序是怎样的呢？
+
+
+
+#### 默认行为：顺序不确定
+
+- 如果你没有为这些切面指定任何执行顺序，那么它们之间的**执行顺序是未定义的**。
+  - 这个顺序可能会依赖于编译器的编译顺序、类的加载顺序等不可靠的因素。在生产环境中，**依赖于默认顺序是非常危险的**，我们必须显式地控制它
+    - 比如说有一种说法中的默认顺序说是根据**类的字母顺序**定义的，这是巧合罢了，因为Spring官方从来没这样承认过
+
+
+
+#### 解决方案：定义优先级
+
+- 为了解决顺序问题，Spring 提供了**优先级**机制。
+
+  - 你可以为每个切面定义一个优先级，Spring AOP 会根据这个优先级来决定它们的执行顺序。
+
+  - **核心规则：优先级数值越小，优先级越高。**
+    - 也就是说，`@Order(1)` 的切面会比 `@Order(10)` 的切面**先执行**。
+
+
+
+#### 如何定义优先级：`@Order` 注解 (推荐方式)
+
+- `@Order` 注解是控制切面顺序最常用、最直接的方式。你只需要将这个注解添加到你的切面类上即可。
+
+- **示例场景**：假设我们有一个 `UserService` 的 `createUser()` 方法，它同时被 `LoggingAspect` (日志切面) 和 `SecurityAspect` (安全切面) 匹配。我们希望**先进行安全检查，再记录日志**。
+
+  - **步骤1：创建两个切面，并使用 `@Order` 定义优先级**
+
+    ```java
+    // SecurityAspect.java - 安全切面
+    @Aspect
+    @Component
+    @Order(1) // 优先级为 1，最高
+    public class SecurityAspect {
+    
+        @Before("execution(* com.example.service.UserService.createUser(..))")
+        public void checkSecurity() {
+            System.out.println("--- [SecurityAspect @Order(1)] --- 安全检查通过。");
+        }
+    }
+    ```
+
+    ```java
+    // LoggingAspect.java - 日志切面
+    @Aspect
+    @Component
+    @Order(2) // 优先级为 2，较低
+    public class LoggingAspect {
+    
+        @Before("execution(* com.example.service.UserService.createUser(..))")
+        public void logBefore() {
+            System.out.println("--- [LoggingAspect @Order(2)] --- 准备记录方法入参日志...");
+        }
+    
+        @After("execution(* com.example.service.UserService.createUser(..))")
+        public void logAfter() {
+            System.out.println("--- [LoggingAspect @Order(2)] --- 方法执行完毕，记录结束日志。");
+        }
+    }
+    ```
+
+
+
+#### 执行顺序的“洋葱模型”
+
+- 当多个切面应用到一个方法时，它们的执行就像一个“洋葱模型”或者“俄罗斯套娃”。**优先级越高的切面，在越外层**。
+
+- 这意味着：
+  1. **对于 `@Before` (前置通知)**：
+     - 优先级高的 (`@Order(1)`) 先执行。
+  2. **对于 `@After`, `@AfterReturning`, `@AfterThrowing` (后置通知)**：
+     - 优先级高的 (`@Order(1)`) **后执行**。
+     - 这很好理解：因为外层的切面最后才退出。是吗？乱定义的记住就行，叽里咕噜说什么呢
+
+- **【@Around 的情况】** 
+  - 如果两个切面都是 `@Around`，那么 `@Order(1)` 的 `proceed()` 方法会包裹住 `@Order(2)` 的 `proceed()` 方法，形成一个清晰的嵌套调用链
+
+
+
+#### 备选方案：实现 `Ordered` 接口
+
+- 除了 `@Order` 注解，你还可以让你的切面类实现 `org.springframework.core.Ordered` 接口，并重写 `getOrder()` 方法。效果和 `@Order` 注解完全一样
+
+  ```java
+  @Aspect
+  @Component
+  public class SecurityAspect implements Ordered {
+  
+      @Override
+      public int getOrder() {
+          return 1; // 返回优先级数值
+      }
+  
+      // ... 通知代码
+  }
+  ```
+
+
+
+## 切点表达式
+
+- **切点表达式(Pointcut Expression)**是AOP的核心,它就像一套强大的“查询语言”,用来精确地筛选出我们想要增强的“连接点”(即方法)
+  - 在 Spring AOP 中，我们主要使用 AspectJ 的切点表达式语法
+  - 建议**基于接口**描述切入点表达式
+
+
+
+### 通配符
+
+- 在 AspectJ 的切点表达式中，通配符至关重要
+  - 通配符使表达式具备了强大的灵活性和模式匹配能力，让我们可以通过简洁的模式来捕获一批目标方法
+
+- 最核心、最常用的通配符有两个：
+
+  1. **`*` (星号)**: 代表**一个**任意元素。
+  2. **`..` (双点号)**: 代表**零个或多个**任意元素。
+
+  - 它们的具体含义会根据其所在的位置而变化
+
+
+
+#### `*` (星号)
+
+- `*` 可以看作是单个词的占位符。它可以用在返回值、包名、类名、方法名或单个参数上
+
+##### 1. 用在【返回值类型】上
+
+- `*` 代表匹配任意类型的返回值。这是最常见的用法
+
+  ```java
+  // 匹配所有返回值类型为任意类型的方法
+  execution(* com.example.service.UserService.*(..))
+  ```
+
+  
+
+##### 2. 用在【包名、类名、方法名】上
+
+- `*` 代表匹配名称中的一个任意部分
+
+  ```java
+  // 匹配 com.example.service 包下的所有类
+  execution(* com.example.service.*.*(..))
+  //                           ^-- 这里的*代表任意类名
+  
+  // 匹配 com.example.service.UserService 类中所有以 "find" 开头的方法
+  execution(* com.example.service.UserService.find*(..))
+  //                                         ^-- 这里的*代表find后面的任意字符
+  
+  // 匹配 com.example 包下，所有以 "Service" 结尾的类
+  execution(* com.example.*Service.*(..))
+  //                      ^-- 这里的*代表Service前面的任意字符
+  ```
+
+  
+
+##### 3. 用在【参数列表】上
+
+- `*` 代表匹配**一个任意类型**的参数
+
+  ```java
+  // 匹配只有一个参数，且参数类型为任意类型的方法
+  execution(* com.example.service.UserService.*(*))
+  
+  // 匹配有两个参数，第一个是 Long，第二个是任意类型的方法
+  execution(* com.example.service.UserService.*(java.lang.Long, *))
+  ```
+
+- **注意**: `(*)` 和 `(..)` 是完全不同的。`(*)` 强制要求方法**必须有且仅有一个参数**，而 `(..)` 则没有这个限制
+  - `(*,*)`表示**有且仅有两个参数**，以此类推
+
+
+
+#### `..` (双点号)
+
+- `..` 更强大，它可以代表一连串的元素，通常用在包名和参数列表中
+
+##### 1. 用在【包名】上
+
+- `..` 代表当前包及其**所有子包**
+
+  ```java
+  // 匹配 com.example 包及其所有子包（如 com.example.service, com.example.controller）下的所有类的所有方法
+  execution(* com.example..*.*(..))
+  //                     ^-- 这里的..代表 com.example 包下的多级子包
+  ```
+
+  - 这是项目中最常用的写法之一，可以一次性覆盖整个业务逻辑层
+
+
+
+##### 2. 用在【参数列表】上
+
+- `..` 代表匹配**零个或任意多个、任意类型**的参数
+
+  ```java
+  // 匹配 com.example.service.UserService 类中所有方法，无论参数是什么
+  execution(* com.example.service.UserService.*(..))
+  //                                         ^-- 这里的..代表任意参数列表，包括无参
+  
+  // 匹配第一个参数为 Long，后面可以有任意个其他参数的方法
+  execution(* com.example.service.UserService.*(java.lang.Long, ..))
+  ```
+
+
+
+### `execution()`:最常用的表达式
+
+- `execution()` 是功能最强大、使用最广泛的表达式，它能精确到方法的每一个细节
+
+
+
+#### 语法结构
+
+```cmd
+execution( [修饰符] 返回值类型 [包名.类名.]方法名(参数列表) [throws 异常] )
+```
+
+- 方括号 `[]` 中的部分是可选的
+
+
+
+#### 语法详解
+
+```cmd
+execution( [修饰符] 返回值类型 [包名.类名.]方法名(参数列表) [throws 异常] )
+```
+
+- **`修饰符` (可选)**:
+
+  - **作用**: 用来限定方法的访问权限，如 `public`, `protected`, `private`。
+  - **通配符**: 通常我们不关心方法的具体修饰符，所以会省略这部分，或者使用 `*` 来代表任意修饰符。
+  - **示例**: `execution(public * *(..))` 只匹配 `public` 方法。而 `execution(* *(..))` 则匹配所有 `public`, `protected`, `private` 方法，因此 `*` 更常用。
+
+  
+
+- **`返回值类型` (必选)**:
+
+  - **作用**: 限定方法的返回值类型。可以是具体类型如 `String`, `int`，也可以是 `void`。
+
+  - **通配符**: `*` 是这里的关键，它代表**任意返回值类型**。
+
+  - **示例**: `execution(String com.example..*.*(..))` 只匹配返回 `String` 的方法。而 `execution(* com.example..*.*(..))` 匹配所有返回值类型的方法。
+
+    
+
+- **`包名.类名.` (可选)**:
+
+  - **作用**: 这是定位方法所在位置的核心部分。
+
+  - **通配符**:
+
+    - `*`: 可以匹配包、类名中的一个部分。例如 `com.example.service.*` 匹配 `service` 包下的所有类。
+    - `..`: 这是最强大的通配符，代表“当前包及其所有子包”。例如 `com.example..` 会匹配 `com.example` 包、`com.example.service` 包、`com.example.service.impl` 包等等。
+
+  - **示例**:
+
+    - `com.example.service.UserService`: 精确到 `UserService` 类。
+
+    - `com.example.service.*`: `service` 包下的所有类。
+
+    - `com.example..*`: `com.example` 包及其所有子包下的所有类。
+
+      
+
+- **`方法名` (必选)**:
+
+  - **作用**: 限定方法的名称。
+
+  - **通配符**: `*` 同样适用。
+
+    - `*`: 匹配所有方法名。
+    - `set*`: 匹配所有以 `set` 开头的方法名 (如 `setName`, `setAge`)。
+    - `*User*`: 匹配所有包含 `User` 字符串的方法名 (如 `findUserById`, `deleteUser`)。
+
+  - **示例**: `execution(* *..UserService.find*(..))` 匹配 `UserService` 中所有以 `find` 开头的方法。
+
+    
+
+- **`参数列表` (必选)**:
+
+  - **作用**: 这是区分重载方法（同名但参数不同）的关键。
+
+  - **通配符**:
+
+    - `()`: 匹配一个无参数的方法。
+    - `(..)`: 匹配任意数量、任意类型的参数。这是**最常用**的。
+    - `(*)`: 匹配只有一个参数的方法，参数类型不限。
+    - `(String, ..)`: 匹配至少有一个参数，且第一个参数类型是 `String` 的方法。
+    - `(.., String)`: 匹配至少有一个参数，且最后一个参数类型是 `String` 的方法。
+
+  - **示例**: `execution(* *..*.*(..))` 匹配所有方法，不关心参数。`execution(* *..*.*(Long))` 只匹配只有一个 `Long` 类型参数的方法。
+
+    
+
+- **`异常` (可选)**:
+
+  - **作用**: 限定方法声明中 `throws` 的异常类型。
+  - **说明**: 这个部分很少使用，通常我们不通过方法签名中的异常来筛选方法，所以基本上都会省略。
+
+
+
+#### 常用示例
+
+```JAVA
+// 1. 拦截任意公共方法的执行
+@Pointcut("execution(public * *(..))")
+
+// 2. 拦截 com.example.service 包下 CalculatorService 类中的所有方法
+@Pointcut("execution(* com.example.service.CalculatorService.*(..))")
+
+// 3. 拦截 com.example.service 包下的所有类的所有方法
+// 第一个 * 代表任意返回值类型
+// 第二个 * 代表包下的所有类
+// 第三个 * 代表类中的所有方法
+@Pointcut("execution(* com.example.service.*.*(..))")
+
+// 4. 拦截 com.example.service 包以及其所有子包下的所有类的所有方法
+// `..` 用在包名后，表示当前包和所有子包
+@Pointcut("execution(* com.example.service..*.*(..))")
+
+// 5. 拦截所有名字以 "find" 开头的方法
+@Pointcut("execution(* *..*.find*(..))")
+
+// 6. 拦截所有只有一个参数，且该参数类型为 Long 的方法
+@Pointcut("execution(* *..*.*(Long))")
+
+// 7. 拦截第一个参数为 Long，后面可以有任意数量、任意类型参数的方法
+@Pointcut("execution(* *..*.*(Long, ..))")
+```
+
+
+
+### `within()`：按类型精准定位
+
+- `within()` 指示符的核心作用是**按类型筛选连接点**。
+  - 它会匹配指定类或接口中的**所有**方法。
+  - 可以把它理解为**“只要是在这个类里面定义的方法，我都要”**。
+
+
+
+#### 语法详解
+
+- `within()` 的表达式内只需要**填写类型的全限定名**，同样支持 `*` 和 `..` 通配符
+
+  - **`within(com.example.service.UserServiceImpl)`**:
+
+    - **含义**: 匹配 `UserServiceImpl` 这个类中定义的所有方法。
+
+    - **注意**: 如果 `UserServiceImpl` 继承了父类，那么父类中定义的方法**不会**被 `within()` 匹配到。它只关心当前类本身
+
+      
+
+  - **`within(com.example.service.\*)`**:
+
+    - **含义**: 匹配 `com.example.service` 包下的所有类（不含子包）中的所有方法
+
+      
+
+  - **`within(com.example.service..\*)`**:
+
+    - **含义**: 匹配 `com.example.service` 包**以及其所有子包**下的所有类中的所有方法
+
+
+
+#### `within()` vs `execution()` 
+
+- **筛选粒度**:
+  - **`within()`**: 作用于 **类/类型** 级别。
+  - **`execution()`**: 作用于 **方法** 级别，更加精细。
+- **筛选能力**:
+  - **`within()`**: 只能筛选到**某个类**，无法关心方法细节。
+  - **`execution()`**: 能筛选到方法的**返回值、修饰符、方法名、参数**等一切细节。
+- **继承性**:
+  - **`within()`**: 不匹配父类中定义的方法，只关心当前类。
+  - **`execution()`**: 可以匹配到子类继承或重写的方法。
+
+
+
+#### **总结**
+
+- 如果你想对某个或某些类下的**所有方法**都一视同仁地进行增强，用 `within()` 更简洁；
+- 如果你需要更精細的控制，比如只增强某个类下返回值为 `String` 的 `find*` 方法，那就必须用 `execution()`
+
+
+
+### `@annotation()`：按注解优雅筛选
+
+- `@annotation()` 是一个极其优雅且实用的指示符。
+  - 它让你能够**只匹配那些被特定注解标记的方法**。这完美地实现了“约定优于配置”的思想，让 AOP 的应用更加灵活和解耦
+  - 这种方式的好处是，未来如果你有新的方法需要记录日志，只需要给它标上注解即可，切面代码完全不需要改动
+    - 这个非常好了我感觉，因为这个非常灵活，一定程度上能简化组合表达式
+
+
+
+#### 语法详解
+
+- 表达式内填写**注解类型的全限定名**。
+  - **`@annotation(com.example.aop.MyLog)`**:
+    - **含义**: 匹配任何一个被 `@com.example.aop.MyLog` 这个注解所标记的方法。
+
+
+
+#### 典型使用流程 (黄金三步)
+
+1. **第一步：自定义一个注解**
+
+   - 这个注解将作为我们的“标记”，告诉 AOP：“凡是看到我的地方，你都要过来工作”。
+
+     ```java
+     // 定义一个注解，用于标记需要记录日志的方法
+     @Target(ElementType.METHOD) // 表示这个注解只能用在方法上
+     @Retention(RetentionPolicy.RUNTIME) // 确保 AOP 在运行时能读到这个注解
+     public @interface ActionLog {
+         String description() default ""; // 还可以定义一些属性，比如操作描述
+     }
+     ```
+
+     
+
+2. **第二步：在业务方法上使用注解**
+
+   - 在你需要增强的业务方法上，像贴标签一样，把注解贴上去。
+
+     ```java
+     @Service
+     public class UserServiceImpl implements UserService {
+     
+         @ActionLog(description = "创建新用户")
+         @Override
+         public void createUser(User user) {
+             System.out.println("核心业务：正在创建用户 " + user.getName());
+         }
+     
+         // 这个方法没有注解，所以不会被 AOP 匹配到
+         @Override
+         public User findUserById(Long id) {
+             return new User("张三");
+         }
+     }
+     ```
+
+     
+
+3. **第三步：编写切点和通知**
+
+   - 切点表达式直接指向我们自定义的注解。
+
+     ```java
+     @Aspect
+     @Component
+     public class LogAspect {
+     
+         // 切点表达式精确匹配 @ActionLog 注解
+         @Pointcut("@annotation(com.example.aop.ActionLog)")
+         public void actionLogPointcut() {}
+     
+         @Before("actionLogPointcut()")
+         public void logBefore(JoinPoint joinPoint) {
+             // 还可以通过 JoinPoint 获取注解的详细信息
+             System.out.println("【日志注解AOP】：方法即将执行...");
+         }
+     }
+     ```
+
+     
+
+   - 这种方式的好处是，未来如果你有新的方法需要记录日志，只需要给它贴上 `@ActionLog` 标签即可，切面代码完全不需要改动
+
+
+
+### `bean()`：按 Bean 名称直接锁定
+
+- `bean()` 是 Spring AOP 特有的一个指示符，它允许你**根据 Bean 在 Spring 容器中的 ID 或 name 来进行匹配**。
+  - 当你想对某个特定的 Bean 实例的所有方法进行增强时，它非常有用
+
+
+
+#### 语法详解
+
+- 表达式内填写 Bean 的名称，支持 `*` 通配符
+
+  - **`bean("userServiceImpl")`**:
+    - **含义**: 匹配 Spring 容器中 ID 为 `userServiceImpl` 的那个 Bean 的所有方法。
+
+  - **`bean("*ServiceImpl")`**:
+    - **含义**: 匹配 Spring 容器中所有以 `ServiceImpl` 结尾的 Bean 的所有方法。
+
+  - **`bean("user*")`**:
+    - **含义**: 匹配所有以 `user` 开头的 Bean 的所有方法。
+
+
+
+#### 适用场景
+
+- 当你明确知道某个 Bean 的名称，并且想对它进行整体增强时，`bean()` 是最直接的方式。
+  - 例如，对所有 `ServiceImpl` 结尾的实现类进行统一的事务管理或日志记录。
+
+
+
+### 组合表达式：构建强大的逻辑规则
+
+- AOP 允许你像写代码里的 `if` 判断一样，使用逻辑运算符来组合多个切点表达式，从而构建出更复杂、更精确的筛选规则。
+
+
+
+#### `@PointCut`注解
+
+![image-20250901004548438](./assets/image-20250901004548438.png)
+
+- 如果使用了public修饰符，在别的类中引用的方式通常是**类的全限定名 + 方法名**
+  - 例如 `com.example.aop.SystemPointcuts.inServiceLayer()`
+- `@Pointcut` 依附于一个空方法之上，这个**方法名**就成了切点的**名字**
+- 一旦你定义了一个命名切点，就可以在同一个切面类的任何通知中，通过**方法名 + `()`** 的形式来引用它
+
+
+
+#### 逻辑运算符
+
+- **`&&` 或 `and`**: **与**操作，表示两个条件必须同时满足。
+- **`||` 或 `or`**: **或**操作，表示两个条件满足任意一个即可。
+- **`!` 或 `not`**: **非**操作，表示排除符合该条件的连接点。
+
+
+
+#### 最佳实践：使用命名切点进行组合
+
+- 为了让代码更清晰、更易于维护和复用，强烈推荐先定义独立的、有明确名称的切点，然后再对这些命名切点进行组合。
+
+  ```java
+  @Aspect
+  @Component
+  public class SecurityAspect {
+  
+      // 规则1：定义一个切点，匹配所有 Service 层的公共方法
+      @Pointcut("within(com.example.service..*) && execution(public * *(..))")
+      public void allServicePublicMethods() {}
+  
+      // 规则2：定义一个切点，匹配所有 find 或 get 开头的方法
+      @Pointcut("execution(* find*(..)) || execution(* get*(..))")
+      public void findOrGetMethods() {}
+  
+      // 规则3：定义一个切点，匹配更新操作的方法
+      @Pointcut("execution(* update*(..)) || execution(* save*(..))")
+      public void updateMethods() {}
+  
+      // 组合A：对所有查询方法，不进行任何操作 (仅为示例)
+      @Before("allServicePublicMethods() && findOrGetMethods()")
+      public void doNothingForFind() {
+          // ...
+      }
+  
+      // 组合B：对所有非查询的更新方法，进行权限检查
+      @Before("allServicePublicMethods() && !findOrGetMethods() && updateMethods()")
+      public void checkPermission() {
+          System.out.println("【权限AOP】：正在检查更新权限...");
+      }
+  }
+  ```
+
+  
+
+- 通过这种方式，你的切面逻辑会变得像搭积木一样清晰，每个切点的职责单一，组合起来却能实现非常强大的功能
+
+
+
+## 在 Spring Boot 中使用 AOP
+
+### 步骤
+
+![image-20250831213848048](./assets/image-20250831213848048.png)
+
+### 注意点
+
+- 夫工程已经管理了aop依赖的版本，所以可以不指定
+- 要加上`@Component`注解
+
+
+
+### AOP 核心接口
+
+- 在 Spring AOP 的世界里，所有的“通知 (Advice)”代码都不是孤立执行的，它们需要一种机制来与当前被拦截的方法（即“连接点”）进行交互。
+  - `JoinPoint` 和 `ProceedingJoinPoint` 就是 AOP 框架提供的、用于实现这种交互的“信使”和“控制器”。
+
+
+
+#### `JoinPoint`
+
+##### 基础概念
+
+- 可以把 `JoinPoint` 想象成一个**“事件报告”**。
+- 当某个切点被成功匹配，AOP 框架就会自动生成一份关于当前连接点的详细报告，并将其作为参数传递给你的通知方法。
+  - 你**只能读取**这份报告，无法用它来干预方法的执行。
+
+- **适用范围**：所有通知类型 (`@Before`, `@After`, `@AfterReturning`, `@AfterThrowing`, `@Around`) 都可以接收 `JoinPoint` 参数
+
+
+
+##### 核心方法
+
+- `Object[] getArgs()`: 获取方法调用时的**参数**数组
+- `Signature getSignature()`: 获取方法的**签名**，从中可以得到方法名、类名等
+- `Object getTarget()`: 获取**目标对象**（你写的原始业务类实例）
+- `Object getThis()`: 获取**AOP代理对象**（Spring生成的增强版对象）
+
+
+
+##### 使用场景
+
+- `JoinPoint` 最适合用于那些**只观察、不干预**的场景，比如：
+
+  - **日志记录**：在 `@Before` 通知中，使用 `getArgs()` 和 `getSignature()` 记录方法的入参和名称。
+
+  - **监控**：在 `@After` 通知中，记录哪个方法被调用了一次。
+
+  - **数据审计**：在 `@AfterReturning` 中，记录方法的返回值。
+
+
+
+**示例代码：**
+
+```
+@Aspect
+@Component
+public class LoggingAspect {
+
+    @Before("execution(* com.example.service.*.*(..))")
+    public void logBeforeExecution(JoinPoint joinPoint) {
+        // 从“事件报告”中读取信息
+        Signature signature = joinPoint.getSignature();
+        Object[] args = joinPoint.getArgs();
+
+        System.out.println("观察到方法即将执行: "
+            + signature.getDeclaringTypeName() + "." + signature.getName()
+            + ", 参数为: " + Arrays.toString(args));
+    }
+}
+```
+
+
+
+#### `ProceedingJoinPoint`
+
+##### 基础概念
+
+- `ProceedingJoinPoint` 是 `JoinPoint` 的**超集**（子接口），它继承了 `JoinPoint` 的所有信息读取能力
+  - 但最重要的是，它额外获得了一个**至高无上的权力**——通过 `proceed()` 方法**手动控制目标方法的执行**
+
+- **适用范围**：**仅限于 `@Around` 环绕通知**，其它类只能用`JoinPoint`
+  - 这是因为只有环绕通知才具有在目标方法执行前后都插入逻辑，并且能控制其是否执行的能力。
+
+
+
+##### `proceed()` 方法
+
+- **`proceed()` 方法是 `@Around` 环绕通知独有的、至高无上的特权。** 这种设计是 AOP 框架为了保证逻辑清晰和功能划分而刻意为之的
+  - 这个方法在别的注解标注的方法中无法使用
+
+
+
+###### 为什么返回值是 `Object`
+
+**答案：为了具备最大的通用性。**
+
+- AOP 框架的设计者面临一个挑战：`@Around` 通知可能被应用到**任何**方法上，这些方法的返回值类型千差万别，可能是 `String`、`Integer`、`List<User>`，甚至是基本类型 `int`、`boolean`，也可能是 `void`（无返回值）
+
+  - 如何设计一个 `proceed()` 方法，使其能够**统一地代表所有这些可能性**？
+
+    - `Object` 是 Java 世界里所有引用类型的根。
+
+      - 如果原始方法返回 `String`，`proceed()` 就返回一个 `String` 对象，可以向上转型为 `Object`。
+
+      - 如果原始方法返回 `List<User>`，`proceed()` 就返回一个 `List` 对象，也可以向上转型为 `Object`。
+
+      - 如果原始方法返回基本类型，如 `int`，Java 的**自动装箱机制**会将其转换为对应的包装类 `Integer`，`Integer` 同样是 `Object` 的子类。
+
+  - 因此，将 `proceed()` 的返回值设计为 `Object`，是唯一能够**以不变应万变**、兼容所有返回类型的优雅方案。
+
+
+
+###### 原始方法的返回值是 `void` 咋办
+
+- 当 `proceed()` 执行一个返回值为 `void` 的目标方法时，它会**返回 `null`**
+
+- 这是 `void` 在 Java 对象世界中的一种逻辑映射。
+
+  - `void` 本身代表“没有返回值”，而在引用类型中，`null` 代表“没有指向任何对象”
+
+  - 因此，在你的 `@Around` 通知代码中，你需要遵守一个原则
+
+    - **你的环绕通知方法的返回值，必须与原始方法的返回值兼容**
+
+      - 如果原始方法返回 `String`，你的环绕通知理论上也应该返回一个 `String`（或者 `null`）。
+
+      - **如果原始方法返回 `void`，你的环绕通知方法也应该声明为 `void`，或者返回 `null`。**
+
+
+
+- **示例代码：**
+
+  ```java
+  // 目标方法
+  @Service
+  public class MailService {
+      // 这是一个 void 方法
+      public void sendEmail(String to, String content) {
+          System.out.println("--- 核心业务: 正在发送邮件给 " + to + " ---");
+      }
+  }
+  
+  // 切面
+  @Aspect
+  @Component
+  public class MailAspect {
+      
+      // 注意：环绕通知的返回值类型最好也声明为 Object
+      @Around("execution(* com.example.service.MailService.sendEmail(..))")
+      public Object aroundSendEmail(ProceedingJoinPoint pjp) throws Throwable {
+          System.out.println("【环绕通知-前】准备发送邮件...");
+  
+          // 调用 proceed() 执行 void 方法
+          Object result = pjp.proceed();
+  
+          // 此时，result 的值是 null
+          System.out.println("proceed() 方法的返回值: " + result); // 输出: null
+  
+          System.out.println("【环绕通知-后】邮件发送流程结束。");
+  
+          // 因为原始方法是 void，这里应该返回 null 或者将通知方法声明为 void
+          return result; // 即 return null;
+      }
+  }
+  ```
+
+
+
 # 全局异常处理器
 
 - 在构建健壮的 Web 应用时，优雅地处理异常是至关重要的一环。后端服务在处理请求时，无论是预期的业务逻辑错误还是意外的系统故障，都可能导致异常。如果没有一个统一的机制，我们可能需要在每个 Controller 方法中嵌入 `try-catch` 逻辑，这不仅导致代码冗余、难以维护，还会让业务逻辑与错误处理逻辑高度耦合
