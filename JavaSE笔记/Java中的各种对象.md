@@ -153,3 +153,9 @@
       // Getters and Setters...
   }
   ```
+
+
+
+## Spring中提供的
+
+- Spring中还提供了**`ResponseEntity`**和**`RequestEntity`**，不过不太常用
