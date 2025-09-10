@@ -38,14 +38,22 @@
 
     - **传统方式**: 对象自己负责创建和管理它所依赖的其他对象。
       例如，`UserService` 需要 `UserRepository`，它就得自己 `new UserRepositoryImpl()`。这种方式下，`UserService` 和 `UserRepositoryImpl` 紧密耦合在了一起。
+      
     - **IoC 方式**: 将创建和管理对象的**控制权**，从程序员的代码中**反转**（转移）到了一个独立的第三方容器（Spring IoC 容器）。
       你不再需要手动 `new` 对象，而是由容器来负责对象的整个生命周期（创建、组装、销毁）。
+      
     - **IoC 容器**: 在 Spring 中，IoC 容器的两个核心接口是 `BeanFactory` 和 `ApplicationContext`。
       `ApplicationContext` 是 `BeanFactory` 的子接口，提供了更完整的功能，如国际化、事件发布等。在 Spring Boot 中，我们打交道的通常都是 `ApplicationContext`。
-
+      
+      > .我见过一种说法，说这个SpringBoot中的IOC容器就是这个`ApplicationContext`，我感觉可信度还挺高的
+  
+  
+  
+  
+  
   - **依赖注入 (DI - Dependency Injection)**: **实现 IoC 的最主要、最具体的技术**。容器知道每个对象需要哪些其他对象（即“依赖”），并自动将这些依赖“注入”到需要它们的对象中。
     DI 的核心好处是**解耦**，让你的类只依赖于接口或抽象，而不是具体的实现，这使得代码**更容易维护和测试**
-
+  
     > **Spring的自动依赖注入，其本质，就是在IoC容器创建Bean实例的过程中，为这个实例的成员变量进行赋值。**
     >
     > 这个过程发生在组件扫描之后、Bean的实例化阶段。Spring会根据`@Autowired`等注入标记，从容器中查找类型匹配的Bean，并将其“注入”到需要它的地方。
@@ -55,7 +63,7 @@
     > 然而，当类存在**多个构造方法**时，Spring就无法决策，此时`@Autowired`就成了**必需的指令**，用来明确指定Spring应该使用哪一个构造方法来创建对象。
     >
     > 除了构造方法，依赖也可以通过在Setter方法或字段上添加`@Autowired`来注入，但这发生在对象被构造方法创建**之后**。最终，只有通过这些方式明确请求注入的成员变量才会被Spring自动赋值，开发者可以借此精确控制每个Bean的依赖关系。
-
+  
   - **只有被Spring IoC容器管理的组件（也就是Bean），才有资格享受容器提供的自动依赖注入服务**
 
 
@@ -502,11 +510,227 @@
 
 
 
-## 3. 容器中的Bean对象数量
+## 3.Bean创建的时机与懒加载
+
+### 默认创建时机
+
+- Spring IoC（控制反转）容器会在**启动时**创建并初始化所有的单例（Singleton）Bean。
+- 对于非单例Bean，例如`prototype` Bean，Spring 容器在启动时只会解析其定义，但不会创建它的实例。
+  只有当每次通过 `getBean()` 方法请求它，或者它被注入到另一个 Bean 中时，Spring 容器才会创建一个**全新的**实例。
+  每次请求都会得到一个新对象。
+
+
+
+### 懒加载`@Lazy`
+
+- 通过使用 `@Lazy` 注解，我们可以告诉容器延迟某个 Bean 的初始化，直到它第一次被实际使用时才创建。
+
+#### 为什么需要 `@Lazy`？
+
+- 在某些场景下，延迟加载会更有优势：
+
+  - **加快应用启动速度**：如果某些 Bean 在初始化时需要执行耗时操作（例如，加载大量数据、建立网络连接），并且这些 Bean 在应用启动阶段并不会立即被用到，那么将它们设置为懒加载可以显著缩短应用的启动时间。
+
+  - **节省内存资源**：对于那些占用大量内存但又不常被使用的 Bean，懒加载可以避免在应用启动时就为其分配内存，只有在真正需要时才占用资源。
+
+  - **解决循环依赖**：在某些复杂的依赖关系中，使用 `@Lazy` 可以作为解决循环依赖问题的一种方法。当 A 依赖 B，同时 B 又依赖 A 时，可以将其中一个依赖项标记为 `@Lazy`，从而打破启动时互相依赖的僵局。
+
+
+
+#### `@Lazy` 注解的使用
+
+- `@Lazy` 可以用在多种不同的配置场景中
+
+
+
+##### a) 用在 `@Component` (及其衍生注解) 上
+
+- 你可以直接将 `@Lazy` 注解放在使用 `@Component`、`@Service`、`@Repository` 或 `@Controller` 注解的类上
+
+- **示例：**
+
+  - 假设我们有一个非常耗时的服务 `HeavyResourceService`
+
+    ```java
+    package com.example.lazy.demo;
+    
+    import org.springframework.stereotype.Service;
+    import javax.annotation.PostConstruct;
+    
+    @Service
+    // @Lazy // 取消此行注释以启用懒加载
+    public class EagerLoadingService {
+    
+        public EagerLoadingService() {
+            System.out.println("EagerLoadingService: 构造函数被调用！我被立即加载了。");
+        }
+    
+        @PostConstruct
+        public void init() {
+            System.out.println("EagerLoadingService: 初始化方法完成。");
+        }
+    
+        public String getInfo() {
+            return "这是一个立即加载的Bean";
+        }
+    }
+    ```
+
+    ```java
+    package com.example.lazy.demo;
+    
+    import org.springframework.context.annotation.Lazy;
+    import org.springframework.stereotype.Service;
+    import javax.annotation.PostConstruct;
+    
+    @Service
+    @Lazy // 使用 @Lazy 注解
+    public class LazyLoadingService {
+    
+        public LazyLoadingService() {
+            // 当这个 Bean 被懒加载时，应用启动时不会打印这条消息
+            System.out.println("LazyLoadingService: 构造函数被调用！我被延迟加载了。");
+        }
+    
+        @PostConstruct
+        public void init() {
+            System.out.println("LazyLoadingService: 初始化方法完成。");
+        }
+    
+        public String getInfo() {
+            return "这是一个懒加载的Bean";
+        }
+    }
+    ```
+
+    
+
+- **运行结果分析：**
+
+  - **不使用 `@Lazy`**：启动应用时，控制台会立刻打印出 `EagerLoadingService` 的构造函数和初始化消息。
+
+  - **使用 `@Lazy`**：启动应用时，`LazyLoadingService` 的任何消息都不会被打印。只有当第一次从容器中获取它或它被注入到另一个非懒加载的 Bean 中并被调用时，你才会看到它的构造函数和初始化消息。
+
+
+
+##### b) 用在 `@Bean` 方法上
+
+- 当你在一个 `@Configuration` 类中使用 `@Bean` 方法来定义 Bean 时，可以将 `@Lazy` 注解直接放在方法上。
+
+- **示例：**
+
+  ```java
+  package com.example.lazy.demo;
+  
+  import org.springframework.context.annotation.Bean;
+  import org.springframework.context.annotation.Configuration;
+  import org.springframework.context.annotation.Lazy;
+  
+  @Configuration
+  public class AppConfig {
+  
+      @Bean
+      @Lazy // 将此 Bean 配置为懒加载
+      public LazyBeanFromConfig lazyBean() {
+          System.out.println("正在创建 LazyBeanFromConfig...");
+          return new LazyBeanFromConfig();
+      }
+  }
+  
+  class LazyBeanFromConfig {
+      public String getInfo() {
+          return "通过 @Bean 方法懒加载的 Bean";
+      }
+  }
+  ```
+
+  
+
+##### c) 用在依赖注入点 `@Autowired` 上
+
+- 你也可以将 `@Lazy` 注解与 `@Autowired` 结合使用，来注入一个代理对象。
+
+- **示例：**
+
+  ```java
+  package com.example.lazy.demo;
+  
+  import org.springframework.beans.factory.annotation.Autowired;
+  import org.springframework.context.annotation.Lazy;
+  import org.springframework.stereotype.Component;
+  
+  @Component
+  public class MyComponent {
+  
+      private final LazyLoadingService lazyService;
+  
+      // 即使 LazyLoadingService 本身没有标记 @Lazy
+      // 在注入点使用 @Lazy 也会达到懒加载的效果
+      @Autowired
+      public MyComponent(@Lazy LazyLoadingService lazyService) {
+          System.out.println("MyComponent: 构造函数被调用。");
+          this.lazyService = lazyService;
+      }
+  
+      public String useLazyService() {
+          // 在这里，第一次调用 lazyService 的方法时，才会真正触发它的初始化
+          System.out.println("即将首次使用 Lazy Service...");
+          return lazyService.getInfo();
+      }
+  }
+  ```
+
+  
+
+- 在这种情况下，Spring 会为 `LazyLoadingService` 注入一个代理对象。
+  - `MyComponent` 在创建时并不会触发 `LazyLoadingService` 的实际初始化。只有当 `useLazyService()` 方法被调用，代理对象第一次被使用时，真正的 `LazyLoadingService` 实例才会被创建。
+
+
+
+#### 全局懒加载
+
+- 如果你想让应用程序中所有的 Bean 都默认使用懒加载，可以在主程序类或配置类上使用 `@Lazy` 注解，或者通过配置文件进行设置
+
+- **通过注解：**
+
+  ```java
+  import org.springframework.boot.autoconfigure.SpringBootApplication;
+  import org.springframework.context.annotation.Lazy;
+  
+  @SpringBootApplication
+  @Lazy // 此处设置全局懒加载，但通常不推荐
+  public class LazyApplication {
+      // ...
+  }
+  ```
+
+  
+
+- **通过 `application.properties`:**
+
+  ```properties
+  spring.main.lazy-initialization=true
+  ```
+
+  
+
+- 设置全局懒加载可以极大地加快启动速度，但它也有缺点：
+
+  - **隐藏配置错误**：错误可能要到运行时才被发现，而不是在启动阶段。
+
+  - **首次请求延迟**：对于 Web 应用，第一个处理相关业务的请求可能会因为需要初始化一连串的 Bean 而变得非常慢，影响用户体验
+
+  因此，通常更推荐对特定的、重量级的 Bean 进行局部懒加载，而不是全局设置
+
+
+
+
+
+## 4. 容器内Bean对象的创建数量与作用域
 
 - 容器中**同一个Bean，会创建几个**，取决于 Bean 的**作用域（Scope）**。`@Component` 默认的作用域是**单例（Singleton）**
 
-### **默认情况：单例**
+### **默认情况：单例`singleton`**
 
 - **定义**：在整个 Spring IoC 容器的生命周期中，一个类只会**创建一个** Bean 实例
 
@@ -545,9 +769,9 @@
 
   
 
-### **例外情况：原型**
+### **例外情况：原型**`prototype`
 
-- 你可以**使用 `@Scope` 注解来改变默认行为，但是内部有别的原因，我用了反正没成功过**
+- 你可以**使用 `@Scope` 注解来改变默认行为，我有时候成功，有时候又不成功，很奇怪**
 
   - 当作用域被设置为 `prototype` 时，**每次请求或注入**这个 Bean，Spring 容器都会创建一个**全新的**实例
 
@@ -572,7 +796,7 @@
 
 
 
-### **`@Scope`作用域总结**
+### **`@Scope`作用域总结表格**
 
 | 作用域                 | 描述                          | 创建时机                               |
 | ---------------------- | ----------------------------- | -------------------------------------- |
@@ -583,7 +807,7 @@
 
 
 
-## 4. Bean 的命名规则
+## 5. Bean 的命名规则
 
 - 当 Spring 注册一个 Bean 时，会给它一个名字(ID)
 
@@ -2917,7 +3141,7 @@ public Object aroundAdviceExample(ProceedingJoinPoint pjp) throws Throwable {
 
 
 
-### `execution()`:最常用的表达式
+### ⭐`execution()`:最常用的表达式
 
 - `execution()` 是功能最强大、使用最广泛的表达式，它能精确到方法的每一个细节
 
@@ -3097,7 +3321,7 @@ execution( [修饰符] 返回值类型 [包名.类名.]方法名(参数列表) [
 
 
 
-### `@annotation()`：按注解优雅筛选
+### ⭐`@annotation()`：按注解优雅筛选
 
 - `@annotation()` 是一个极其优雅且实用的指示符。
   - 它让你能够**只匹配那些被特定注解标记的方法**。这完美地实现了“约定优于配置”的思想，让 AOP 的应用更加灵活和解耦
@@ -3740,28 +3964,34 @@ public class GlobalExceptionHandler {
 
 ### `@Configuration`
 
-- `@Configuration`：
+- `@Configuration`：是一个类级别的注解
   - `@Configuration` 首先是一个 `@Component`，所以它会把被注解的类本身注册为一个 Bean
-  - 除此之外，它还有一个特殊的功能：它会告诉 Spring 容器，**这个类是一个“Bean 工厂”**，请检查**它内部所有被 `@Bean` 注解的方法**，并**将这些方法的返回值也注册为新的 Bean**
-    - 特殊情况：
-      - 没有返回值 (`void`) 的方法会怎么样？
-        - 会直接报错
-        - Spring 容器在启动时会检查所有 `@Bean` 方法，它期望这些方法能返回一个对象来注册为 Bean。如果一个 `@Bean` 方法的返回类型是 `void`，Spring 会认为这是一个无效的 Bean 定义，并在启动阶段抛出异常
-      - 返回值是基本数据类型会怎么样？
-        - **可以，但不常见**
-        - Spring 会将这个基本数据类型**自动装箱**成对应的**包装类**，并将其注册为一个 Bean
-      - 返回值是 `null` 会怎么样？
-        - **这个 Bean 将不会被创建和注册**
+  - 它向 Spring 表明：**“我这个类是专门用来定义 Bean 的配置中心，请特殊处理我！”**
+  - 特殊情况：
+    - 没有返回值 (`void`) 的方法会怎么样？
+      - 会直接报错
+      - Spring 容器在启动时会检查所有 `@Bean` 方法，它期望这些方法能返回一个对象来注册为 Bean。如果一个 `@Bean` 方法的返回类型是 `void`，Spring 会认为这是一个无效的 Bean 定义，并在启动阶段抛出异常
+    - 返回值是基本数据类型会怎么样？
+      - **可以，但不常见**
+      - Spring 会将这个基本数据类型**自动装箱**成对应的**包装类**，并将其注册为一个 Bean
+    - 返回值是 `null` 会怎么样？
+      - **这个 Bean 将不会被创建和注册**
 
 
 
 ### `@Bean`
 
-- `@Bean`：
+> 有一个非常常见的用处：就是利用它可以让IOC容器管理一个第三方的对象，因为你没办法在第三方的类代码中加`@Component`注解
 
-  - 它**用在方法上**，这个方法的**返回值**就会被注册为一个 Bean，**默认的 Bean 名字就是方法名**
+- `@Bean`：是一个方法级别的注解
+
+  - 它**用在方法上**，这个方法的**返回值**就会被注册为一个 Bean，**默认的 Bean 名字就是方法名**，可以用这个注解的属性给这个bean起名字
 
     > Bean，说白了，就是一个由 Spring 容器（IoC Container）负责创建、管理和维护的 Java 对象
+
+  - `@Bean` 方法是由 Spring **自动调用**的，不需要手动调用它们。如果一个 `@Bean` 方法带有**参数**，Spring 会自动把这些参数看作是该 Bean 的依赖项，并从容器中寻找匹配的 Bean **自动注入**。
+
+    
 
   - **进阶知识：`@Bean` 方法可以重载吗？**
 
@@ -3792,6 +4022,24 @@ public class GlobalExceptionHandler {
         ```
 
         - 这样，你就可以通过  `@Qualifier` 或 `Resource()` 来精确注入你需要的那个 Bean 了
+
+
+
+### `@Configuration`和`@Bean`的联立
+
+- 如果**只在方法上使用`@Bean`，而没有在类上写明`@Configuration`**，会怎么样？
+  - 如果只在方法上使用 `@Bean`，而类上没有 `@Configuration`（比如用 `@Component` 或者干脆不用注解），`@Bean` 依然会生效，这个 Bean 也会被注册到 Spring 容器中。但是，它的行为模式会和在 `@Configuration` 类中有所不同
+    - **完全模式 (Full Mode) - 使用 `@Configuration`** 
+      - 当一个类被标记为 `@Configuration` 时，Spring 容器会使用 CGLIB 技术为这个类创建一个代理子类。当你调用这个类中的 `@Bean` 方法时，实际上调用的是这个代理对象的方法。这个代理会拦截你的调用，并检查容器中是否已经存在该类型的 Bean
+        - 如果存在，它会直接返回容器中已有的那个**单例（Singleton）**实例。
+        - 如果不存在，它才会执行方法体，创建一个新的实例，注册到容器中，然后返回。
+        - **效果**：确保了即使你在配置类内部多次调用同一个 `@Bean` 方法，也永远只会得到同一个由 Spring 管理的单例 Bean
+    - **精简模式 (Lite Mode) - 使用 `@Component` 或无注解** 
+      - 如果一个类没有被 `@Configuration` 标记（例如，它被标记为 `@Component`），Spring 不会为它创建 CGLIB 代理。这个类就是一个普通的组件
+        - 当你在这个类内部调用一个 `@Bean` 方法时，它就和调用一个普通的 Java 方法完全一样。
+        - **效果**：每次调用都会执行方法体，从而**创建一个全新的对象实例**。这个新创建的对象并没有被 Spring 容器管理，它只是一个普通的 Java 对象。
+
+
 
 
 
