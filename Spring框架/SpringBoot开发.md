@@ -3742,7 +3742,7 @@ public class GlobalExceptionHandler {
 
 - `@Configuration`：
   - `@Configuration` 首先是一个 `@Component`，所以它会把被注解的类本身注册为一个 Bean
-  - 除此之外，它还有一个特殊的功能：它会告诉 Spring 容器，**这个类是一个“Bean 工厂”**，请检查**它内部所有被 `@Bean` 注解的方法**，并**将这些方法的返回值也注册为新的 Bean**。
+  - 除此之外，它还有一个特殊的功能：它会告诉 Spring 容器，**这个类是一个“Bean 工厂”**，请检查**它内部所有被 `@Bean` 注解的方法**，并**将这些方法的返回值也注册为新的 Bean**
     - 特殊情况：
       - 没有返回值 (`void`) 的方法会怎么样？
         - 会直接报错
