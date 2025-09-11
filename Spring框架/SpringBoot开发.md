@@ -827,14 +827,20 @@
 
 # 应用的启动与自动化配置
 
-## 启动类与`@SpringBootApplication`
+## 启动类与`@SpringBootApplication`注解
 
 - 每个 Spring Boot 应用都有一个带有 `main` 方法的启动类，它是整个应用的**唯一入口**和**配置中心**。其核心是 `@SpringBootApplication` 注解，它是一个组合注解，包含了三个关键功能：
-  - **`@ComponentScan` (扫描组件)**: 告诉 Spring 从哪里开始扫描你的类（`@Component`, `@Service` 等）以注册为 Bean。
+  - **`@ComponentScan` (扫描组件)**: 告诉 Spring 从哪里开始扫描你的类（`@Component`, `@Service` 等）以注册为 Bean
+    
     - **默认规则**: 默认的扫描路径是该注解所在类**所处的包**及其所有子包。
-    - **最佳实践**: 将启动类放在项目的根包下（如 `com.example.myapp`），这样它就能自然地扫描到所有业务代码，无需额外配置。
+    - **最佳实践**: 将启动类放在项目的根包下（如 `com.example.myapp`），这样它就能自然地扫描到所有业务代码，无需额外配置
+    
   - **`@EnableAutoConfiguration` (开启自动配置)**: 这是 Spring Boot 的“魔法”核心。它会根据你项目中引入的 `starter` 依赖，智能地、自动地配置应用所需的各种 Bean。
-    - **工作原理**: Spring Boot 会扫描所有依赖包中的 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 文件（旧版本为 `spring.factories`），加载其中定义的自动配置类。这些配置类会根据条件（如 classpath 中是否存在某个类）来决定是否生效。
+    - **工作原理**: Spring Boot 会扫描所有依赖包中的
+       `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 文件（旧版本为 `spring.factories`），加载其中定义的自动配置类。
+    
+      这些配置类会根据条件（如 classpath 中是否存在某个类）来决定是否生效。
+    
   - **`@SpringBootConfiguration` (声明为配置类)**: 这本质上就是 `@Configuration` 注解。它允许你在启动类中也通过 `@Bean` 注解来手动定义 Bean，从而将启动类本身也作为一个配置源。
 
 
@@ -880,6 +886,386 @@
 
 - `@SpringBootApplication` 注解本身就包含了 `@ComponentScan`，它会默认扫描主启动类所在的包及其所有子包。因此，在测试环境下，这个扫描机制同样会被触发，从而将 `src/main/java` 下的类纳入管理
 - 如果**没有** `@SpringBootTest` 注解，Spring Boot 不会自动加载任何应用上下文，因此 `src/main/java` 目录下的类（Beans）也不会被扫描和放入 IoC 容器中。
+
+
+
+## `@ComponentScan`组件扫描注解
+
+### 1. `@ComponentScan` 是什么？
+
+- `@ComponentScan` 是 Spring 框架中用于配置组件扫描的核心注解。它的唯一职责就是告诉 Spring **从哪些包（package）中去寻找和发现被特定注解（如 `@Component`, `@Service`, `@Repository`, `@Controller` 等）标记的类，并将它们自动注册为 Spring IoC 容器中的 Bean**
+
+- 在 Spring Boot 项目中，我们通常在主启动类上看到的 `@SpringBootApplication` 注解，其内部就已经包含了 `@ComponentScan`。这也是为什么 Spring Boot 能够“自动”发现我们项目中的组件，实现了约定优于配置的核心理念
+
+### 2. 注解的放置位置
+
+- `@ComponentScan` 注解并非可以随意放置在任何类上，它必须用在**配置类 (Configuration Class)** 上才能生效
+
+- 一个类通常通过以下注解被识别为配置类：
+
+  - **`@Configuration`**: 这是最标准的用法。Spring 会将任何标记了 `@Configuration` 的类作为 Bean 定义和应用配置的来源。
+
+  - **`@SpringBootApplication`**: 在 Spring Boot 应用中，主启动类上的这个注解是最佳放置位置，因为它本身已经包含了 `@Configuration`
+
+- **为什么必须放在配置类上？**
+
+  - Spring 容器在启动时，会首先加载这些“配置类”，然后解析它们上面的元数据（注解）来决定如何构建应用上下文。
+
+    如果 `@ComponentScan` 被放在一个普通的组件（如 `@Service` 类）上，Spring 在初始化阶段不会将其视为配置源，因此该注解会被完全忽略，不会触发任何扫描行为。
+
+
+
+### 3. 核心属性详解
+
+- `@ComponentScan` 提供了多个属性，让我们能够灵活地定制扫描行为
+
+#### 3.1. `basePackages` (或 `value`)
+
+- 这是最常用的属性，用于明确指定一个或多个需要扫描的基础包路径。`value` 是 `basePackages` 的别名
+
+  - **类型**: `String[]` (字符串数组)
+
+  - **作用**: 定义扫描的起始包。Spring 会递归扫描这些包及其所有子包。
+
+- **示例：**
+
+  ```java
+  // 扫描单个包
+  @ComponentScan(basePackages = "com.example.myapp.service")
+  
+  // 同时扫描多个包
+  @ComponentScan(basePackages = {"com.example.myapp.service", "com.example.another.util"})
+  
+  // 使用 value 别名
+  @ComponentScan("com.example.myapp") // 等同于 basePackages = "com.example.myapp"
+  public class AppConfig {
+      // ...
+  }
+  ```
+
+
+
+#### 3.2. `basePackageClasses` (推荐方式)
+
+- `basePackageClasses` 属性的作用就是告诉 Spring 去扫描您所指定的**那个类所在的包**，以及那个包下面的所有子包
+
+- 为了解决 `basePackages` 的类型安全问题，Spring 提供了 `basePackageClasses` 属性
+
+  - **类型**: `Class<?>[]` (Class 对象数组)
+
+  - **作用**: 指定一个或多个类或接口。Spring 会扫描这些指定的类所在的包
+
+- **示例：** 假设 `UserService` 在 `com.example.myapp.service` 包下，`SomeUtil` 在 `com.example.another.util` 包下
+
+  ```java
+  import com.example.myapp.service.UserService;
+  import com.example.another.util.SomeUtil;
+  
+  @ComponentScan(basePackageClasses = {UserService.class, SomeUtil.class})
+  public class AppConfig {
+      // ...
+  }
+  ```
+
+- 上面的配置会告诉 Spring 去扫描 `com.example.myapp.service` 和 `com.example.another.util` 这两个包
+
+
+
+#### 3.3. 类型安全详解：`basePackages` vs `basePackageClasses`
+
+- “类型安全”是理解 `basePackageClasses` 优势的关键。其核心区别在于**错误是在编译时还是运行时被发现**。
+
+- **`basePackages` (非类型安全)**
+  - **问题**: 它接收的是一个**普通字符串**。
+    - 编译器无法验证这个字符串是否对应一个真实存在的包。如果你拼写错误（例如 `"com.example.servise"`），或者在重构时忘记修改这个字符串，代码依然能正常编译
+  - **后果**: 错误只会在**运行时**暴露。
+    - 当 Spring Boot 启动时，它会因为找不到指定的包路径而无法加载 Bean，最终导致应用启动失败或抛出 `NoSuchBeanDefinitionException`
+- **`basePackageClasses` (类型安全)**
+  - **优势**: 它接收的是一个**真实的 Class 对象引用**。
+    - 编译器必须确保这个类是存在的，并且 `import` 语句是正确的。
+  - **后果**: 任何由于拼写错误、类被删除或包被重命名导致的问题，都会在**编译时**就立刻报错。
+    - 你可以在编码阶段就发现并修复问题，避免了运行时错误的风险。
+
+- 总而言之，`basePackageClasses` 将包路径的配置与真实的代码结构绑定在一起，利用编译器的检查机制来保证配置的正确性，因此更加健壮和易于维护
+
+
+
+### 4. 强大的扫描过滤器
+
+- `@ComponentScan` 允许我们通过过滤器（Filter）来更精细地控制哪些类应该被注册，哪些应该被忽略。这通过 `includeFilters` 和 `excludeFilters` 两个属性实现。
+  - 每个过滤器都由 `type` (过滤类型) 和 `classes` (或 `pattern` 等) 组成。
+
+
+
+#### 4.1. 过滤类型 (`type`)
+
+- `ANNOTATION`: 根据注解进行过滤。`classes` 属性指定注解类
+- `ASSIGNABLE_TYPE`: 根据指定的类或接口进行过滤。`classes` 属性指定类或接口，所有是其子类或实现类的组件都会被匹配
+- `REGEX`: 根据类名的**完全限定名**进行正则表达式匹配。`pattern` 属性指定正则表达式
+- `ASPECTJ`: 根据 AspectJ 表达式进行匹配（不常用）
+- `CUSTOM`: 使用自定义的 `TypeFilter` 实现类，允许最灵活的过滤逻辑
+
+
+
+#### 4.2. `excludeFilters`
+
+- 用于在扫描过程中排除掉符合条件的组件。
+
+  - **示例：扫描所有组件，但排除所有 Controller**
+
+    ```java
+    import org.springframework.stereotype.Controller;
+    import org.springframework.context.annotation.FilterType;
+    import org.springframework.context.annotation.ComponentScan.Filter;
+    
+    @ComponentScan(
+        basePackages = "com.example.myapp",
+        excludeFilters = @Filter(
+            type = FilterType.ANNOTATION, 
+            classes = Controller.class
+        )
+    )
+    public class AppConfig {
+        // ...
+    }
+    ```
+
+
+
+#### 4.3. `includeFilters`与`useDefaultFilters`
+
+- `includeFilters` 用于在默认扫描规则之外，额外引入组件。但它的行为依赖于 `useDefaultFilters` 属性
+  - `useDefaultFilters`: 布尔值，默认为 `true`。
+    - **`true` (默认)**: Spring 会首先执行默认的扫描规则（寻找 `@Component` 等），然后再应用你定义的 `includeFilters` 和 `excludeFilters`。
+    - **`false`**: Spring **完全禁用**默认的扫描规则。此时，只有被 `includeFilters` 明确指定的组件才会被注册。
+
+- **场景1：默认扫描 + 额外包含** （这种情况较少见，因为你可以直接给目标类加上 `@Component` 注解）
+
+- **场景2：禁用默认，只扫描指定组件（白名单模式）** 这个场景非常有用。例如，我们只想扫描那些实现了 `SpecialService` 接口的类，忽略其他所有带 `@Component` 或 `@Service` 的类。
+
+```java
+// 假设有一个接口
+// public interface SpecialService {}
+
+@ComponentScan(
+    basePackages = "com.example.myapp",
+    // 只包含实现了 SpecialService 接口的类
+    includeFilters = @Filter(
+        type = FilterType.ASSIGNABLE_TYPE, 
+        classes = SpecialService.class
+    ),
+    // 必须禁用默认过滤器，否则其他 @Service 也会被扫进去
+    useDefaultFilters = false
+)
+public class AppConfig {
+    // ...
+}
+```
+
+
+
+### 5. 其他常用属性
+
+- `lazyInit`: 类型为 `boolean`。如果设置为 `true`，所有被扫描到的 Bean 都会被配置为懒加载（Lazy Initialization），即在第一次被使用时才创建实例。
+- `nameGenerator`: 类型为 `Class<? extends BeanNameGenerator>`。允许你提供一个自定义的 Bean 名称生成器，来覆盖 Spring 默认的命名策略（类名首字母小写）
+
+
+
+## `@Import` 注解
+
+### 1. `@Import` 是什么？
+
+- `@Import` 注解是 Spring 框架提供的一个功能强大且灵活的工具，用于**精确地、显式地**将一个或多个类的定义导入到当前的 Spring IoC 容器中
+
+- 与 `@ComponentScan` 自动扫描整个包路径不同，`@Import` 允许我们手动指定需要注册为 Bean 的类，从而实现更精细化的配置管理。它通常与 `@Configuration` 注解一起使用在配置类上
+
+### 2. 注解的放置位置
+
+- 与 `@ComponentScan` 类似，`@Import` 注解也不能随意放置。它必须用在**配置类 (Configuration Class)** 上才能生效
+
+- 一个类被识别为配置类，通常是通过以下注解：
+
+  - **`@Configuration`**: 这是最标准的用法。任何被 `@Configuration` 标记的类都会被 Spring 作为配置源来处理。
+
+  - **`@SpringBootApplication`**: 在 Spring Boot 应用中，主启动类上的这个注解是最佳位置，因为它本身已经包含了 `@Configuration`。
+
+- **为什么必须如此？**
+
+  - `@Import` 的作用是向 Spring 容器“导入”更多的配置或 Bean 定义，这个动作本身就是一种配置行为。
+
+    Spring 容器在启动时，会先寻找并加载这些“配置类”，然后解析它们上面的注解（如 `@Import`）来决定如何构建整个应用上下文
+
+    如果你把 `@Import` 放在一个普通的 `@Service` 或 POJO 类上，Spring 只会把它当作一个普通的 Bean 来创建，而不会去处理它上面的 `@Import` 注解，导致该注解被完全忽略
+
+
+
+### 3. `@Import` 的三种核心用法
+
+- `@Import` 注解主要有三种用法，每一种都有其独特的应用场景
+
+#### 用法一：直接导入普通的 Bean 类
+
+- 这是最直接的用法。你可以导入任何一个普通的 Java 类（POJO），Spring 会为这个类创建一个 Bean 实例。
+
+- **示例：**
+
+  - 假设我们有一个普通的工具类 `MyUtil`：
+
+    ```java
+    // 这是一个普通的类，没有 @Component 或其他注解
+    public class MyUtil {
+        public void doSomething() {
+            System.out.println("Doing something useful...");
+        }
+    }
+    ```
+
+    
+
+  - 现在，我们可以在配置类中使用 `@Import` 将它注册为一个 Bean：
+
+    ```java
+    @Configuration
+    @Import(MyUtil.class)
+    public class AppConfig {
+        // ...
+    }
+    ```
+
+    
+
+- **效果**：Spring 容器中现在就有了一个名为 `myUtil` 的 Bean（默认使用类名首字母小写命名）。你可以像注入其他任何 Bean 一样注入并使用它。这种方式常用于导入那些我们无法修改源码（因此无法添加 `@Component` 注解）的第三方库中的类。
+
+
+
+#### 用法二：导入其他配置类 (`@Configuration`)
+
+- `@Import` 可以用来聚合多个配置类，这在大型项目中进行模块化配置时非常有用。
+
+- **示例：**
+
+  - 假设我们有两个独立的配置模块：一个是数据库配置，另一个是缓存配置。
+
+    ```java
+    @Configuration
+    public class DatabaseConfig {
+        @Bean
+        public DataSource dataSource() {
+            // ... 返回一个数据源 Bean
+            return new SomeDataSource();
+        }
+    }
+    ```
+
+    ```java
+    @Configuration
+    public class CacheConfig {
+        @Bean
+        public CacheManager cacheManager() {
+            // ... 返回一个缓存管理器 Bean
+            return new SomeCacheManager();
+        }
+    }
+    ```
+
+    
+
+  - 现在，我们可以创建一个主配置类，将这两个模块化的配置导入进来：
+
+    ```java
+    @Configuration
+    @Import({DatabaseConfig.class, CacheConfig.class})
+    public class MainAppConfig {
+        // 这个主配置类现在聚合了数据库和缓存的所有配置
+    }
+    ```
+
+    
+
+- **效果**：当 Spring 加载 `MainAppConfig` 时，它会一并处理 `DatabaseConfig` 和 `CacheConfig` 中定义的所有 `@Bean`，将它们全部注册到容器中。
+
+
+
+#### 用法三：导入 `ImportSelector` 的实现类
+
+- 这是 `@Import` 最强大和最灵活的用法。`ImportSelector` 是一个接口，它允许你根据条件**动态地、批量地**决定要导入哪些类的配置
+
+- `ImportSelector` 接口只有一个方法 `selectImports()`，它返回一个字符串数组，其中包含要导入的类的完全限定名
+
+- **示例：**
+
+  - 假设我们想根据一个配置开关来决定是否启用某个功能（例如 `FeatureService`）。
+
+    - 首先，创建 `ImportSelector` 的实现：
+
+      ```java
+      import org.springframework.context.annotation.ImportSelector;
+      import org.springframework.core.type.AnnotationMetadata;
+      
+      public class MyFeatureSelector implements ImportSelector {
+      
+          @Override
+          public String[] selectImports(AnnotationMetadata importingClassMetadata) {
+              // 在这里可以编写复杂的逻辑，例如读取配置文件、检查环境变量等
+              boolean featureEnabled = Boolean.parseBoolean(System.getProperty("feature.enabled", "false"));
+              
+              if (featureEnabled) {
+                  // 如果开关为 true，则导入 FeatureService
+                  return new String[]{"com.example.myapp.service.FeatureService"};
+              } else {
+                  // 否则，不导入任何东西
+                  return new String[0];
+              }
+          }
+      }
+      ```
+
+      
+
+    - 然后，在配置类中使用它：
+
+      ```java
+      @Configuration
+      @Import(MyFeatureSelector.class)
+      public class AppConfig {
+          // ...
+      }
+      ```
+
+      
+
+  - **效果**：当应用启动时，如果 JVM 参数中设置了 `-Dfeature.enabled=true`，那么 `FeatureService` 就会被注册为 Bean；否则，它就不会被注册。Spring Boot 中大量的 `@Enable...` 系列注解（如 `@EnableAsync`, `@EnableCaching`）底层就是通过这种机制实现的。
+
+
+
+### 4. 常见场景
+
+1. **常规业务组件**：对于你自己的业务代码（如 Service, Controller, Repository），优先使用 `@ComponentScan`，因为它更自动化，符合 Spring Boot 的约定。
+2. **模块化配置**：当你想将配置拆分到多个 `@Configuration` 文件中时，使用 `@Import` 来聚合它们是一个非常好的实践。
+3. **第三方库集成**：当你需要将一个没有 Spring 注解的第三方类注册为 Bean 时，`@Import` 是一个简洁的选择。
+4. **动态与条件化配置**：当你需要根据外部条件（如配置文件、环境变量）来决定是否加载某些 Bean 或配置时，`@Import` 结合 `ImportSelector` 是实现此功能的标准且强大的方式。
+
+
+
+## `@Import` vs `@ComponentScan`表格
+
+- 虽然两者都用于注册 Bean，但它们的设计理念和使用场景截然不同
+
+  | 特性         | `@ComponentScan`                                       | `@Import`                                                    |
+  | ------------ | ------------------------------------------------------ | ------------------------------------------------------------ |
+  | **工作方式** | **自动扫描**：基于包路径进行广泛扫描。                 | **显式指定**：精确导入一个或多个具体的类。                   |
+  | **粒度**     | **粗粒度**：一次性扫描整个包和子包。                   | **细粒度**：只导入你明确列出的类。                           |
+  | **配置方式** | **约定优于配置**：扫描所有带 `@Component` 等注解的类。 | **配置化**：所有要导入的组件都需要在 `@Import` 中声明。      |
+  | **灵活性**   | 较低。可以通过过滤器进行一些控制。                     | **极高**。特别是配合 `ImportSelector`，可以实现动态、条件化的配置。 |
+  | **典型场景** | 项目内部业务组件的自动发现。                           | 模块化配置、第三方库集成、动态功能开关。                     |
+
+
+
+## `@Enable...`注解
+
+- 它背后隐藏的逻辑是：**通过一个简单的注解，利用 Spring 框架底层的 `@Import` 功能，导入一个或多个预先定义好的配置类 (`@Configuration`)，从而将相关的 Bean 批量注册到 Spring IoC 容器中**。
+
+  > 常见的第三方库里面就好像是定义了这个注解，用来将相关的 Bean 进行注入
 
 
 
@@ -3985,6 +4371,8 @@ public class GlobalExceptionHandler {
 
 - `@Bean`：是一个方法级别的注解
 
+  - 它必须存在于一个被`@Configuration`注解或者`@Component`等注解标记，或者是被`@Import`导入的类中，否则**会被忽略**
+
   - 它**用在方法上**，这个方法的**返回值**就会被注册为一个 Bean，**默认的 Bean 名字就是方法名**，可以用这个注解的属性给这个bean起名字
 
     > Bean，说白了，就是一个由 Spring 容器（IoC Container）负责创建、管理和维护的 Java 对象
@@ -4002,7 +4390,7 @@ public class GlobalExceptionHandler {
       - **最佳实践**：如果你确实需要根据不同参数创建同类型的多个 Bean，**必须为它们指定唯一的名字**。
 
       - 示例
-
+  
         ```JAVA
         @Configuration
         public class MultiBeanConfig {
@@ -4020,26 +4408,40 @@ public class GlobalExceptionHandler {
         	}
         }
         ```
-
+  
         - 这样，你就可以通过  `@Qualifier` 或 `Resource()` 来精确注入你需要的那个 Bean 了
+  
 
 
 
 ### `@Configuration`和`@Bean`的联立
 
-- 如果**只在方法上使用`@Bean`，而没有在类上写明`@Configuration`**，会怎么样？
-  - 如果只在方法上使用 `@Bean`，而类上没有 `@Configuration`（比如用 `@Component` 或者干脆不用注解），`@Bean` 依然会生效，这个 Bean 也会被注册到 Spring 容器中。但是，它的行为模式会和在 `@Configuration` 类中有所不同
-    - **完全模式 (Full Mode) - 使用 `@Configuration`** 
-      - 当一个类被标记为 `@Configuration` 时，Spring 容器会使用 CGLIB 技术为这个类创建一个代理子类。当你调用这个类中的 `@Bean` 方法时，实际上调用的是这个代理对象的方法。这个代理会拦截你的调用，并检查容器中是否已经存在该类型的 Bean
-        - 如果存在，它会直接返回容器中已有的那个**单例（Singleton）**实例。
-        - 如果不存在，它才会执行方法体，创建一个新的实例，注册到容器中，然后返回。
-        - **效果**：确保了即使你在配置类内部多次调用同一个 `@Bean` 方法，也永远只会得到同一个由 Spring 管理的单例 Bean
-    - **精简模式 (Lite Mode) - 使用 `@Component` 或无注解** 
-      - 如果一个类没有被 `@Configuration` 标记（例如，它被标记为 `@Component`），Spring 不会为它创建 CGLIB 代理。这个类就是一个普通的组件
-        - 当你在这个类内部调用一个 `@Bean` 方法时，它就和调用一个普通的 Java 方法完全一样。
-        - **效果**：每次调用都会执行方法体，从而**创建一个全新的对象实例**。这个新创建的对象并没有被 Spring 容器管理，它只是一个普通的 Java 对象。
-
-
+* 如果**只在方法上使用`@Bean`，而没有在类上写明`@Configuration`**，会怎么样？
+    - **前提：** 首先，**包含`@Bean`方法的类必须先被Spring容器“发现”**。Spring不会自动扫描所有文件，一个类被发现主要通过两种方式：
+      
+      - **1. 组件扫描 (`@ComponentScan`)**: 类上必须有`@Component`、`@Service`、`@Configuration`等构造型注解。**如果一个类没有任何注解，组件扫描会直接忽略它**
+      - **2. 显式导入 (`@Import`)**: 强制Spring处理一个类，无论它是否有注解
+      
+    - 在这个前提下，如果一个被“发现”的类**包含`@Bean`方法**但**没有`@Configuration`注解**，`@Bean`会以“精简模式”生效。
+      - **完全模式 (Full Mode) - 使用 `@Configuration`** 
+        
+        - 当一个类被标记为 `@Configuration` 时，Spring 容器会使用 CGLIB 技术为这个类创建一个代理子类。当你在配置类内部的不同`@Bean`方法之间进行调用时（例如，`serviceA()`调用`serviceB()`），实际上调用的是这个代理对象的方法。
+          
+          >我似乎没见过这个内部调用的例子，密码的
+          
+          - 如果容器中已存在目标Bean，代理会直接返回容器中已有的那个**单例（Singleton）**实例。
+          - 如果不存在，它才会执行方法体，创建一个新的实例，注册到容器中，然后返回。
+          - **效果**：确保了在配置类内部，`@Bean`之间的依赖引用永远是容器管理的同一个单例实例，保证了依赖关系的正确性
+        
+      - **精简模式 (Lite Mode) - 在被发现的非`@Configuration`类中使用** 
+        - 如果一个被Spring“发现”的类没有`@Configuration`标记（例如，它是一个被扫描到的`@Component`类，或被`@Import`的普通类），Spring不会为它创建CGLIB代理。
+          - Spring依然会执行这个类中的`@Bean`方法，并将返回的**第一个实例**注册到容器中。
+          
+            但是，如果你在这个类内部，从一个`@Bean`方法去调用另一个`@Bean`方法，这就和调用一个普通的Java方法完全一样了。
+          
+            > 我似乎没见过这个内部调用的例子，密码的
+          
+          - **效果**：这种内部调用会**创建一个全新的、未被Spring容器管理的普通Java对象**，而不是去获取容器中的单例Bean。这会破坏Bean的单例性，并可能导致严重的依赖注入问题
 
 
 
