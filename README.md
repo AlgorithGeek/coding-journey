@@ -3,9 +3,12 @@
 > 本项目在 **Gitee** 与 **GitHub**进行了**同步托管**，欢迎**点击以选择访问您更习惯的平台**
 >
 > <p>
->    <a href="https://gitee.com/AvexVertex/coding-journey"><img src="https://img.shields.io/badge/Gitee-码云-C71D23?logo=gitee" alt="Gitee"></a>   
 >     <a href="https://github.com/AlgorithGeek/coding-journey">
->     <img src="https://img.shields.io/badge/GitHub-仓库-181717?logo=github" alt="GitHub"></a>   
+>  	<img src="https://img.shields.io/badge/GitHub-仓库-181717?logo=github" alt="GitHub">
+>     </a>
+>     <a href="https://gitee.com/AvexVertex/coding-journey">
+> 	<img src="https://img.shields.io/badge/Gitee-码云-C71D23?logo=gitee" alt="Gitee">
+>     </a>
 > </p>
 
 ---
@@ -14,13 +17,13 @@
 
 - 在这里，你将会看到我知识体系的构建过程，主要包括以下几个部分：
 
-  * **🧠 技术笔记**: 系统性地整理编程语言、框架、算法、操作系统等硬核知识。
+  * **🧠 技术笔记**: 系统性地整理编程语言、框架、算法、操作系统等硬核知识
 
-  * **✍️ 零散实践**: 偶然间学到的一些个人认为很有用的东西，会在这里进行上传。
+  * **✍️ 零散实践**: 偶然间学到的一些个人认为很有用的东西，会在这里进行上传(甚至关于租房子的一些建议)
 
-  * **💡 心得与反思**: 超越代码本身，沉淀关于学习方法、职业规划、问题解决思路的思考。
+  * **💡 心得与反思**: 超越代码本身，沉淀关于学习方法、职业规划、问题解决思路的思考
 
-  * **📔 个人日记**: 记录日常的学习进度、遇到的 Bug 和一些灵光一闪的想法。
+  * **📔 个人日记**: 记录日常的学习进度、遇到的 Bug 和一些灵光一闪的想法
 
 ---
 
@@ -57,8 +60,8 @@
 
 - 这并非一份完美的教程，而是一份鲜活的成长记录。
   - 其中难免存在错误或疏漏，**真诚地欢迎大家**：
-    - **🤔 提出问题或想法**：**通过 [Issue](https://gitee.com/AvexVertex/coding-journey/issues) 与我交流**。
-    - **✍️ 帮助改进内容**：**通过 [Pull Request](https://gitee.com/AvexVertex/coding-journey/pulls) 提交你的修订**
+    - **🤔 提出问题或想法**：**通过 `Issue` 与我交流**。
+    - **✍️ 帮助改进内容**：**通过 `Pull Request` 提交你的修订**
   
 - 让我们一起学习，共同进步！
 
