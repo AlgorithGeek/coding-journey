@@ -2,23 +2,23 @@
 
 ## **1. MyBatis 是什么？**
 
-- 用 Java 代码操作数据库。最原始的方式是使用 JDBC，你需要手动编写大量的模板代码：加载驱动、创建连接、创建 `Statement`、拼装 SQL、执行、处理 `ResultSet`、最后还要在 `finally` 块中小心翼翼地关闭各种资源。
+- 用 Java 代码操作数据库。最原始的方式是使用 JDBC，你需要手动编写大量的模板代码：加载驱动、创建连接、创建 `Statement`、拼装 SQL、执行、处理 `ResultSet`、最后还要在 `finally` 块中小心翼翼地关闭各种资源
 
   - 这个过程繁琐、易错，而且 SQL 语句硬编码在 Java 代码里，难以维护。
 
-  - **MyBatis** 就是为了解决这些问题而生的
-
-    - **定位：一个优秀的持久层框架。** 它封装了几乎所有的 JDBC 底层细节，让你不再需要编写那些模板代码。它的核心任务就是帮你管理数据库的增删改查（CRUD）操作。
-
-    - **核心哲学：SQL 与代码解耦。** 这是 MyBatis 最具魅力的特点。它允许你将复杂的 SQL 语句从 Java 代码中抽离出来，统一写在专门的 XML 文件或注解中。这样做的好处是：
-      - **SQL 归 SQL，代码归代码**：分工明确，便于维护。数据库管理员（DBA）或 SQL 专家可以专注于优化 SQL，而 Java 开发者可以专注于业务逻辑
-      - **SQL 更灵活**：你可以充分利用特定数据库的各种高级特性和函数，编写出**性能极致的 SQL**，而不用受框架的束缚
-
-    - **与 Hibernate/JPA 的对比：半自动化 vs 全自动化**
-      - **Hibernate/JPA (全自动 ORM)**: 它们试图完全屏蔽 SQL。你只需要操作 Java 对象（POJO），框架会自动生成 SQL 语句并执行。这在处理简单的 CRUD 时非常高效，但当业务逻辑复杂，需要高度优化的 SQL 时，自动生成的 SQL 往往不尽人意，你可能需要花费很大力气去“告诉”框架如何生成你想要的 SQL。我们称之为“全自动挡汽车”，上手快，但对车辆的精细控制较弱
-      - **MyBatis (半自动 ORM)**: MyBatis 不会自动生成 SQL，它要求你**亲自编写 SQL 语句**。它做的，是帮你把 SQL 的执行、参数的设置、结果集的映射这些繁琐工作自动化。我们称之为“手动挡汽车”，你需要自己换挡（写 SQL），但对车辆的动力和行驶轨迹有绝对的控制权
-
+    - **MyBatis** 就是为了解决这些问题而生的
+      - **定位：一个优秀的持久层框架。** 它封装了几乎所有的 JDBC 底层细节，让你不再需要编写那些模板代码。它的核心任务就是帮你管理数据库的增删改查（CRUD）操作。
+  
+      - **核心哲学：SQL 与代码解耦。** 这是 MyBatis 最具魅力的特点。它允许你将复杂的 SQL 语句从 Java 代码中抽离出来，统一写在专门的 XML 文件或注解中。这样做的好处是：
+        - **SQL 归 SQL，代码归代码**：分工明确，便于维护。数据库管理员（DBA）或 SQL 专家可以专注于优化 SQL，而 Java 开发者可以专注于业务逻辑
+        - **SQL 更灵活**：你可以充分利用特定数据库的各种高级特性和函数，编写出**性能极致的 SQL**，而不用受框架的束缚
+      - **与 Hibernate/JPA 的对比：半自动化 vs 全自动化**
+        - **Hibernate/JPA (全自动 ORM)**: 它们试图完全屏蔽 SQL。你只需要操作 Java 对象（POJO），框架会自动生成 SQL 语句并执行。这在处理简单的 CRUD 时非常高效，但当业务逻辑复杂，需要高度优化的 SQL 时，自动生成的 SQL 往往不尽人意，你可能需要花费很大力气去“告诉”框架如何生成你想要的 SQL。我们称之为“全自动挡汽车”，上手快，但对车辆的精细控制较弱
+        - **MyBatis (半自动 ORM)**: MyBatis 不会自动生成 SQL，它要求你**亲自编写 SQL 语句**。它做的，是帮你把 SQL 的执行、参数的设置、结果集的映射这些繁琐工作自动化。我们称之为“手动挡汽车”，你需要自己换挡（写 SQL），但对车辆的动力和行驶轨迹有绝对的控制权
+  
+  
     >**结论**：MyBatis 特别适合那些业务逻辑复杂、对 SQL 性能要求极高、或者希望对数据库有完全控制权的项目，尤其是在互联网应用中
+  
 
 
 
@@ -46,71 +46,233 @@
 
 
 
-## 3.与JDBC的对比图
+## 3. 与JDBC的对比图
 
 ![image-20250818023831964](./assets/image-20250818023831964.png)
 
 
 
-# **配置文件mybatis-config.xml**
+# 快速入门
 
-## 基本
+- 将 MyBatis 与 Spring Boot 集成是目前企业级开发中的最佳实践。
+- Spring Boot 遵循“约定大于配置”的原则，提供了强大的自动化配置能力，可以让我们以最少的配置来使用 MyBatis，同时还能无缝地利用 Spring 强大的依赖注入和声明式事务管理功能。
 
-- `mybatis-config.xml` 是 MyBatis 的核心配置文件，它包含了影响 MyBatis 行为的全局设置和属性。这个文件的顶层结构是有严格顺序的，如果你不按顺序组织元素，MyBatis 会在解析时报错
-- MyBatis 在启动和运行时，会首先读取这个文件，根据里面的指示来配置自己的行为
-  - 在**独立使用 MyBatis的时候**：**必须写** `mybatis-config.xml`，否则程序无法运行
-  - 在**Mybatis 与 Spring/Spring Boot 集成**：**推荐不写** `mybatis-config.xml`，所有配置都转移到 `application.yml` 或 `application.properties` 文件中，由框架自动完成
+## 第1步：引入依赖
+
+- SpringBoot项目建议引入的依赖
+
+  > 不仅包含了 MyBatis 的所有核心功能，还额外提供了**自动配置**
+
+  ```xml
+  <dependency>
+      <groupId>org.mybatis.spring.boot</groupId>
+      <artifactId>mybatis-spring-boot-starter</artifactId>
+      <version>x.x.x</version>
+  </dependency>
+  ```
 
 
 
-## 配置文件中元素顺序与结构图
+- 一个**纯粹依赖**
 
-```
-configuration
-├── properties
-├── settings
-├── typeAliases
-├── typeHandlers
-├── objectFactory
-├── objectWrapperFactory
-├── reflectorFactory
-├── plugins
-├── environments
-├── databaseIdProvider
-└── mappers
-```
+  > 这是 MyBatis 的纯粹的功能包。在**非 Spring Boot 环境**下使用它，需要大量手动配置
 
-- 这个配置文件中的具体细节，这里先不说
+  ```xml
+  <dependency>
+    <groupId>org.mybatis</groupId>
+    <artifactId>mybatis</artifactId>
+    <version>x.x.x</version>
+  </dependency>
+  ```
+
+
+
+## 第2步：配置`application.yml`
+
+- **配置**
+
+  ```yaml
+  # application.yml
+  
+  # Spring Boot 数据源配置
+  spring:
+    datasource:
+      url: jdbc:mysql://localhost:3306/your_database?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+      username: your_username
+      password: your_password
+      driver-class-name: com.mysql.cj.jdbc.Driver
+  
+  # MyBatis 相关配置
+  mybatis:
+    # 指定 Mapper XML 文件的位置
+    # 使用 classpath*: 前缀可以扫描所有 jar 包中的路径
+    mapper-locations: classpath:mapper/*.xml
+  
+    # 指定实体类别名扫描的包路径
+    # 这样在 XML 中就可以直接使用类名作为 resultType
+    type-aliases-package: com.example.model
+  
+    # 可以在这里直接配置 MyBatis 的原生 setting
+    configuration:
+      # 开启下划线到驼峰的自动映射
+      map-underscore-to-camel-case: true
+      # 配置日志实现为标准输出
+      log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  ```
+
+  - 这个 log-impl 的这个日志配置，配置`org.apache.ibatis.logging.stdout.StdOutImpl`之后，输出示例如下
+
+    ```CMD
+    JDBC Connection [HikariProxyConnection@2083220171 wrapping com.mysql.cj.jdbc.ConnectionImpl@11c7a0b4] will not be managed by Spring
+    ==>  Preparing: select * from user					
+    ==> Parameters: 
+    <==    Columns: id, username, password, name, age
+    <==        Row: 1, daqiao, 123456, 大乔, 25
+    <==        Row: 2, xiaoqiao, 123456, 小乔, 18
+    <==        Row: 3, diaochan, 123456, 貂蝉, 24
+    <==        Row: 4, lvbu, 123456, 吕布, 28
+    <==        Row: 5, zhaoyun, 12345678, 赵云, 27
+    <==      Total: 5
+    Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@14fc9bd]
+    ```
+
+    -  ==> 表示给数据库发送的
+    -  <==  表示数据库返回的
+
+
+
+## 第3步：创建并扫描 Mapper 接口
+
+### 创建Mapper接口
+
+- 创建接口，**绑定 sql 语句**
+
+  - **方式1：注解绑定**
+
+    ```java
+    public interface UserMapper {
+        @Select("select * from user where id=#{id}")
+        User findById(Long id);
+    }
+    ```
+
+  - **方式2：xml文件绑定**
+
+    ```java
+    public interface UserMapper {
+        @Select("select * from user where id=#{id}")
+        User findById(Long id);
+    }
+    ```
+
+    ```xml
+    <!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+    
+    <mapper namespace="xxx.UserMapper">
+        <select id="findById" parameterType="long" resultType="xxx.User">
+            select * from user where id = #{id}
+        </select>
+    </mapper
+    ```
+
+
+
+### 让IOC容器处理Mapper
+
+> 需要让 Spring 容器知道哪些接口是 MyBatis 的 Mapper，以便为它们创建代理对象并进行管理
+
+#### 方式1：使用 `@Mapper` 注解
+
+> 推荐用于少量 Mapper
+
+- 直接在你的 Mapper 接口上添加 `@Mapper` 注解。
+
+  ```java
+  @Mapper // 告诉 Spring Boot 这是一个 MyBatis 的 Mapper 接口
+  public interface UserMapper {
+      User findById(Long id);
+  }
+  ```
+
+  
+
+#### 方式2：使用 `@MapperScan` 注解
+
+> 推荐用于大量 Mapper
+
+- 在你的 Spring Boot 启动类上，使用 `@MapperScan` 注解来指定一个或多个包路径，Spring Boot 会自动扫描这些包下的所有接口作为 Mapper
+
+  ```java
+  @SpringBootApplication
+  @MapperScan("com.example.mapper") // 扫描指定包下的所有 Mapper 接口
+  public class MyApplication {
+      // ...
+  }
+  ```
+
+  
+
+## **第4步：业务层中使用 Mapper**
+
+- 集成完成后，你就可以在你的 Service 层或其他 Spring 组件中，通过标准的依赖注入（`@Autowired`）来直接使用 Mapper 接口了
+
+  ```java
+  @Service
+  public class UserService {
+  
+      @Autowired
+      private UserMapper userMapper; // 直接注入 Mapper 接口
+  
+      public User getUserInfo(Long id) {
+          return userMapper.findById(id);
+      }
+  }
+  ```
+
 
 
 
 # Mapper 配置与扫描
 
-- MyBatis 如何关联 Java Mapper 接口与 XML 映射文件
-- Spring Boot 环境下如何高效地扫描和注册 Mapper
+> - **MyBatis 如何关联 Java Mapper 接口与 XML 映射文件**
+> - **Spring Boot 环境下如何高效地扫描和注册 Mapper**
 
-## 1. Mapper XML 文件的存放位置
+## 1. XML 文件的存放位置
 
-- **核心规则**：Mapper XML 文件**必须**存放在 `src/main/resources` 目录下，而不是 `src/main/java` 目录
+- **核心规则**
+
+  - XML 文件**必须**存放在 **`src/main/resources` 目录**下，而不是 **`src/main/java` 目录**
+
+    > 当然啦，在 **`src/main/resources` 目录**下，你自己又可以指定把文件放到这个目录下的哪里，哈哈哈
 
   > 为了类路径？
 
-- **原因**：这源于标准的项目构建约定
+- **原因**：这源于标准的项目构建**约定**
 
-  - `src/main/java`：此目录下的 `.java` 文件会被编译成 `.class` 文件。默认情况下，所有非 `.java` 文件（如 `.xml`）在编译打包时会被**忽略**
-  - `src/main/resources`：此目录下的所有文件都被视为**资源文件**，在打包时会被**原样复制**到最终的 classpath（运行时查找路径）中
+  > 约定大于配置
 
-- **如果放错位置会怎样？** 程序在启动或运行时会因为在 classpath 中找不到 XML 文件而抛出 `IOException` 或 `BindingException (not found)` 异常，根本无法获取到 SQL 语句
+  - **`src/main/java`**：
+    - 此目录下的 **`.java` 文件**会被编译成 **`.class` 文件**。
+    - 默认情况下，所有**非 `.java` 文件**（如 `.xml`）在编译打包时会被**忽略**
+  - **`src/main/resources`**
+    - 此目录下的所有文件都被视为**资源文件**，在打包时会被**原样复制**到最终的 **classpath** 中
+
+- **如果放错位置会怎样？** 
+
+  - 程序在启动或运行时会因为在 **classpath** 中找不到 XML 文件而**抛出异常**，根本**无法获取到 SQL 语句**
 
 
 
-## 2. 定位并匹配 XML 文件
+
+## 2. 如何定位与匹配 XML 文件
 
 - MyBatis 通过两个步骤来将 Java 接口和 XML 文件进行“配对”：**首先找到文件，然后确认内容**
 
-### 2.1 定位 XML 文件：两种核心方式
+### 第 1 步 : 定位 XML 文件
 
-#### **方式一:约定优于配置 (默认行为)**
+#### **方式1: 约定优于配置 (默认行为)**
 
 - **规则**：如果你**没有**进行任何相关配置，MyBatis 会启用默认约定。此约定包含两个**必须同时满足**的条件：
 
@@ -124,7 +286,7 @@ configuration
 
 
 
-#### **方式二:配置文件中明确指定(推荐)**
+#### **方式2: 在配置文件中指定 (推荐)**
 
 - **规则**：在 Spring Boot 的 `application.properties` 或 `application.yml` 中，通过 `mybatis.mapper-locations` 属性来明确告知 MyBatis 去哪里寻找 XML 文件
 
@@ -156,7 +318,7 @@ configuration
 
   
 
-### 2.2 内容匹配: namespace 最终校验
+### 第 2 步 : 内容匹配: `namespace` 最终校验
 
 - **规则**：无论通过哪种方式找到了 XML 文件，MyBatis 都会进行最后一步校验。XML 文件中 `<mapper>` 标签的 `namespace` 属性值，必须和它对应的 Java Mapper 接口的**全限定名**（包名+类名）**完全一致**
 - **目的**：**最终绑定**。这是确保 SQL 语句和正确接口关联的最后一道防线
@@ -166,31 +328,44 @@ configuration
 
 ## 3. Mapper 接口的扫描与注册
 
-- MyBatis 需要知道去哪里找你的 Java Mapper 接口，并把它们注册到 Spring 容器中
+- MyBatis 需要知道**去哪里找你的 Java Mapper 接口**，并**把它们注册到 Spring 容器中**
+
+
 
 ### 3.1 `@Mapper` vs `@MapperScan`
 
 | 特性         | **@Mapper**                                                  | **@MapperScan**                                              |
 | ------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| **作用**     | **单个注册**：标记在某一个具体的 Mapper 接口上，使其被 Spring 发现并注册。 | **批量扫描**：指定一个基础包路径，自动扫描该路径下的所有接口并注册为 Mapper。 |
-| **使用位置** | 写在**每一个** Mapper 接口的类定义上。                       | 通常写在**主启动类**或一个集中的配置类上。                   |
-| **优点**     | 精确控制，简单明了。                                         | **一劳永逸**，只需配置一次，后续新增接口无需任何操作，是**强烈推荐**的做法。 |
-| **缺点**     | **繁琐**，每增加一个接口都必须手动添加，容易遗漏。           | （几乎没有）                                                 |
+| **作用**     | **单个注册**：标记在某一个具体的 Mapper 接口上，使其被 Spring 发现并注册 | **批量扫描**：指定一个基础包路径，自动扫描该路径下的所有接口并注册为 Mapper |
+| **使用位置** | 写在**每一个** Mapper 接口的类定义上                         | 通常写在**主启动类**或一个集中的配置类上                     |
+| **优点**     | 精确控制，简单明了                                           | **一劳永逸**，只需配置一次，后续新增接口无需任何操作，是**强烈推荐**的做法 |
+| **缺点**     | **繁琐**，每增加一个接口都必须手动添加，容易遗漏             | （几乎没有）                                                 |
 
 
 
 ### 3.2 `@MapperScan` 的使用
 
-- **写在哪里？** 通常写在 Spring Boot 的**主启动类**上（即带有 `@SpringBootApplication` 注解的类）。因为主启动类是应用的入口和配置中心，放在这里可以确保在应用启动的最早期阶段，所有 Mapper 接口都被正确加载。
+- **写在哪里？** 
 
-- **会扫描子包吗？** **是的**。`@MapperScan` 会自动地、递归地扫描你指定的包及其下的**所有子包**，无需手动配置每一个子包路径。
+  - 通常写在 Spring Boot 的**主启动类**上（即带有 `@SpringBootApplication` 注解的类）。
+    因为主启动类是应用的入口和配置中心，放在这里可以确保在应用启动的最早期阶段，所有 Mapper 接口都被正确加载
+
+    > 我认为写到配置类上就行，但是这里写到启动类上显得更好一点
+
+- **会扫描子包吗？** 
+
+  - **是的**。`@MapperScan` 会自动地、递归地扫描你指定的包及其下的**所有子包**，无需手动配置每一个子包路径
+
+  
 
   ```java
-  // 只需要指定顶层包，其下的 product、order 等子包都会被自动扫描
+  // 只需要指定顶层包，其下的子包都会被自动扫描
   @SpringBootApplication
   @MapperScan("com.myapp.mapper")
   public class MyApplication { ... }
   ```
+
+  
 
 
 
@@ -205,27 +380,35 @@ configuration
 
 
 
-# 关于“名字”的关联
+# “名字”的关联
 
-## 绑定机制超级澄清
+> 主要讲述了 java变量、数据库字段、SQL语句 中的关联
+
+>  **`#{}`是写到SQL语句中的占位符，它内部写的是Java中的变量名**
+
+## `#{}`数据绑定机制辨析
 
 ### 原则：两个独立且方向相反的流程
 
 - 理解MyBatis的关键在于，要将“数据从Java流向数据库”和“数据从数据库流向Java”看作两个完全独立、互不干扰的流程
-  1. **数据输出 (Java -> SQL)**：此流程的主角是 `#{}`，它的任务是**从Java参数中取值**。
-  2. **数据输入 (SQL -> Java)**：此流程的主角是**结果映射 (Result Mapping)**，它的任务是**将查询结果填充到Java对象中**。
+  1. **数据输出 (Java -> SQL)**：此流程的主角是 **`#{}`**，它的任务是**从Java参数中取值**
+  2. **数据输入 (SQL -> Java)**：此流程的主角是**结果映射**，它的任务是**将查询结果填充到Java对象中**
 
 ### 流程一：数据输出 - `#{}` 的世界
 
-> 在这个里面，有些地方需要名字相同，但有些地方又不需要名字相同，我归纳的是不需要和形参名字相同，别的地方就需要相同
+> 在`#{}`里面，有些场景下必须和Java变量名相同，但有些地方又不需要和Java变量名相同
 >
-> > 因为形参可能会变化，但是别的不变的，bro
+> > 因为形参可能会变名字，但是别的不变的，bro
 >
-> - **单个简单参数**：不用和某个Java中的变量名字相同，`#{}`也能正确匹配，因为不存在歧义
-> - **多个参数**：不用和形参的名字相同，但是要和`@Param`指定的名字相同，因为`#{}`匹配的是 **`@Param`注解指定的名字**，而不是形参变量名
-> - **单个对象参数**：MyBatis会忽略该对象的形参名，`#{}`匹配的是对象内部的**属性名**，对象内部的属性名不是形参，所以这里要严格和对象内部的属性名相同
+> - **单个简单参数**：
+>   - 不用和某个Java中的变量名字相同，`#{}`也能正确匹配，因为不存在歧义
+> - **多个参数**：
+>   - 不用和形参的名字相同，但是要和`@Param`指定的名字相同，因为`#{}`匹配的是 **`@Param`注解指定的名字**，而不是形参变量名
+> - **单个对象参数**：
+>   - MyBatis 会忽略该对象的形参名，`#{}`匹配的是对象内部的**属性名**，相当于把对象直接展开了，只需要直接对应对象内部的属性名，而不是写**`形参名.属性名`**这种形式
+>   - 对象内部的属性名不是形参，所以这里要严格和对象内部的属性名相同
 
-- `#{}` 是一个纯粹的“Java世界”的指令。它的唯一使命就是匹配Java端的变量/属性名，与数据库字段名**没有任何直接关系**
+- `#{}` 是一个纯粹的“Java世界”的指令。它的唯一使命就是**匹配 Java端的变量/属性名**，与数据库字段名**没有任何直接关系**
 
 
 
@@ -235,9 +418,9 @@ configuration
 
 这是最常见的情况，例如 `void insert(User user);`
 
-- **`#{}` 匹配对象**：JavaBean的**属性名**。
-- **核心逻辑**：MyBatis会忽略方法参数名(`user`)，直接通过Java反射机制，寻找并调用该对象属性对应的`getter`方法。
-- **示例**：`#{userName}` 会精确地寻找并调用 `user.getUserName()` 方法来取值。
+- **`#{}` 匹配对象**：JavaBean的**属性名**
+- **核心逻辑**：MyBatis会忽略方法参数名(`user`)，直接通过Java反射机制，寻找并调用该对象属性对应的`getter`方法
+- **示例**：`#{userName}` 会精确地寻找并调用 `user.getUserName()` 方法来取值
 
 
 
@@ -245,11 +428,11 @@ configuration
 
 - 必须使用 `@Param` 注解，例如 `void update(@Param("id") int userId, @Param("name") String userName);`
 
-  - **`#{}` 匹配对象**：`@Param("...")` 注解中**指定的名字**。
+  - **`#{}` 匹配对象**：`@Param("...")` 注解中**指定的名字**
 
-  - **核心逻辑**：MyBatis会将所有参数放入一个内部Map中，`@Param`指定的名字就是这个Map的键(key)。`#{}`根据这个键来取值。
+  - **核心逻辑**：MyBatis会将所有参数放入一个内部Map中，`@Param`指定的名字就是这个Map的键(key)。`#{}`根据这个键来取值
 
-  - **示例**：`#{name}` 会在内部Map中寻找键为 `"name"` 的项。
+  - **示例**：`#{name}` 会在内部Map中寻找键为 `"name"` 的项
 
 
 
@@ -257,11 +440,11 @@ configuration
 
 - 这是一个特例，例如 `User findById(Integer userId);`
 
-  - **`#{}` 匹配对象**：理论上可以是**任意名字**，但最佳实践是与**方法参数名**保持一致。
+  - **`#{}` 匹配对象**：理论上可以是**任意名字**，但最佳实践是与**方法参数名**保持一致
 
-  - **核心逻辑**：因为只有一个参数，MyBatis知道`#{}`指的一定是它，所以能正确匹配。
+  - **核心逻辑**：因为只有一个参数，MyBatis知道`#{}`指的一定是它，所以能正确匹配
 
-  - **示例**：`#{id}` 或 `#{userId}` 都能正确匹配到 `userId` 这个参数。
+  - **示例**：`#{id}` 或 `#{userId}` 都能正确匹配到 `userId` 这个参数
 
   
 
@@ -310,25 +493,22 @@ configuration
 
 - 当自动映射无法满足需求时，可以使用手动方式进行精确控制
 
-  - **SQL别名 (`AS`)**：在`SELECT`语句中为字段起一个与Java属性名完全相同的别名。
+  - **SQL别名 (`AS`)**：在`SELECT`语句中为字段起一个与Java属性名完全相同的别名
 
     ```sql
     SELECT user_name AS userName FROM user;
     ```
 
-  - **`<resultMap>`**：在XML中定义一个详细的映射规则，明确指定哪个数据库字段对应哪个Java属性。这是最强大、最灵活的方式。
+  - **`<resultMap>`**：在XML中定义一个详细的映射规则，明确指定哪个数据库字段对应哪个Java属性。这是最强大、最灵活的方式
 
 
 
+## `#{}`场景
+
+>  **`#{}`是写到SQL语句中的占位符，它内部写的是Java中的变量名**
 
 
-## Java中的变量名与`#{}`进行绑定
-
-- MyBatis 中如何将 Mapper 接口方法的参数与 SQL 语句中的 `#{...}` 占位符进行绑定的核心规则
-  - `#{}`是在sql语句中用的，在属性中要是涉及到Java属性可以直接写，不用写`#{}`
-
-
-### 场景一：单个 POJO 对象参数
+### 场景1：单个 POJO 对象参数
 
 - 这是最常见的情况，比如 `update(User user)`
 
@@ -374,7 +554,7 @@ configuration
 
   
 
-### 场景二：多个参数
+### 场景2：多个参数
 
 - 当方法参数超过一个时，情况就完全不同了，比如 `update(User user, Long operatorId)`
 
@@ -428,7 +608,7 @@ configuration
 - **解决的问题**：它解决了 Java 编译后可能丢失参数名以及当存在多个参数时产生的歧义问题，是确保参数正确传递给 SQL 的关键工具
 - 这里先说一个重要的：如果方法的形参是一个对象，`#{...}` 中的名字**必须**和传入的 Java 对象（POJO）中的**属性名**严格保持一致，不然报错，关于多个参数的见下
 
-### 1. 为什么需要 `@Param`？核心痛点
+### 1. 为什么需要 `@Param`？
 
 - **痛点一：参数名丢失**
 
@@ -454,7 +634,9 @@ configuration
     </select>
     ```
 
-### 2. `@Param` 的工作原理与核心用法
+
+
+### 2. `@Param` 的原理与用法
 
 - **工作原理**：MyBatis 在处理带有多个参数或使用了 `@Param` 注解的参数时，会创建一个 `Map` 来存放这些参数。
 
@@ -573,6 +755,8 @@ configuration
 ## Java变量和数据库属性关联
 
 ### 方法1：`AS`起别名
+
+> 我不太喜欢这种方式强行把形参和数据库名对应起来
 
 ```java
 @Select("select id, name, create_time as createTime, update_time as updateTime from dept order by update_time desc;")
@@ -695,7 +879,7 @@ public interface UserMapper {
 
 
 
-# MyBatis查询后在Java中的返回类型
+# MyBatis查询后的返回类型
 
 ## `resultType` 和`resultMap`
 
@@ -799,7 +983,7 @@ public interface UserMapper {
 
 
 
-# Mapper XML详解
+# Mapper XML文件
 
 - MyBatis 的核心魅力在于它能将 SQL 从业务逻辑中解耦出来，而 Mapper XML 文件正是承载这些 SQL 的核心工作区。
   - Mapper XML文件 精确定义了 **Mapper 接口中的方法如何与具体的 SQL 语句绑定、参数如何传递以及结果如何映射**。
@@ -816,6 +1000,8 @@ public interface UserMapper {
 
 - 一个标准的 Mapper XML 文件头部如下
   - 它定义了 **XML 版本、编码**以及 MyBatis 的 DTD，用于约束和校验文件格式的正确性
+
+  > 可以直接拿去复制到新项目中去
 
 ```xml
 <?xml version="1.0" encoding="UTF-8" ?>
@@ -2220,7 +2406,7 @@ public interface UserMapper {
 
 ## **基本注解**
 
-### 最基本CRUD注解
+### 基本 CRUD 注解
 
 - 这是最常用的一组注解，分别对应增、删、改、查操作
 
@@ -2658,216 +2844,27 @@ MyBatis 允许你通过实现 `Cache` 接口，将二级缓存替换为专业的
 
 
 
-# Spring Boot 集成MyBatis
-
-- 将 MyBatis 与 Spring Boot 集成是目前企业级开发中的最佳实践。
-- Spring Boot 遵循“约定大于配置”的原则，提供了强大的自动化配置能力，可以让我们以最少的配置来使用 MyBatis，同时还能无缝地利用 Spring 强大的依赖注入和声明式事务管理功能。
-
-## **第一步：引入核心依赖**
-
-- 你只需要在 `pom.xml` 中引入一个核心的 "starter" 依赖，它会帮你把所有需要的相关包（包括 `mybatis`, `mybatis-spring`, `spring-boot-starter-jdbc` 等）都自动引入
-
-```xml
-<dependencies>
-    <!-- MyBatis Spring Boot Starter -->
-    <dependency>
-        <groupId>org.mybatis.spring.boot</groupId>
-        <artifactId>mybatis-spring-boot-starter</artifactId>
-        <version>2.3.1</version> <!-- 建议使用与你 Spring Boot 版本兼容的较新版本 -->
-    </dependency>
-
-    <!-- 数据库驱动 (以 MySQL 为例) -->
-    <dependency>
-        <groupId>com.mysql</groupId>
-        <artifactId>mysql-connector-java</artifactId>
-        <scope>runtime</scope>
-    </dependency>
-
-    <!-- Spring Boot Web Starter (通常项目都会用到) -->
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-web</artifactId>
-    </dependency>
-</dependencies>
-```
-
-- 引入 `mybatis-spring-boot-starter` 后，Spring Boot 会在启动时自动检测到 MyBatis 的存在，并触发一系列的自动化配置
-
-
-
-## **第二步：核心配置 (`application.yml`)**
-
-- 你不再需要 `mybatis-config.xml` 文件了！几乎所有的 MyBatis 配置都可以直接在 Spring Boot 的核心配置文件 `application.yml` (或 `application.properties`) 中完成
-
-  ```yaml
-  # application.yml
-  
-  # Spring Boot 数据源配置
-  spring:
-    datasource:
-      url: jdbc:mysql://localhost:3306/your_database?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
-      username: your_username
-      password: your_password
-      driver-class-name: com.mysql.cj.jdbc.Driver
-  
-  # MyBatis 相关配置
-  mybatis:
-    # 指定 Mapper XML 文件的位置
-    # 使用 classpath*: 前缀可以扫描所有 jar 包中的路径
-    mapper-locations: classpath:mapper/*.xml
-  
-    # 指定实体类别名扫描的包路径
-    # 这样在 XML 中就可以直接使用类名作为 resultType
-    type-aliases-package: com.example.model
-  
-    # 可以在这里直接配置 MyBatis 的原生 setting
-    configuration:
-      # 开启下划线到驼峰的自动映射
-      map-underscore-to-camel-case: true
-      # 配置日志实现为标准输出
-      log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
-  ```
-
-  - 这个 log-impl 的这个日志配置，配置`org.apache.ibatis.logging.stdout.StdOutImpl`之后，输出示例如下
-
-    ```CMD
-    JDBC Connection [HikariProxyConnection@2083220171 wrapping com.mysql.cj.jdbc.ConnectionImpl@11c7a0b4] will not be managed by Spring
-    ==>  Preparing: select * from user					
-    ==> Parameters: 
-    <==    Columns: id, username, password, name, age
-    <==        Row: 1, daqiao, 123456, 大乔, 25
-    <==        Row: 2, xiaoqiao, 123456, 小乔, 18
-    <==        Row: 3, diaochan, 123456, 貂蝉, 24
-    <==        Row: 4, lvbu, 123456, 吕布, 28
-    <==        Row: 5, zhaoyun, 12345678, 赵云, 27
-    <==      Total: 5
-    Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@14fc9bd]
-    ```
-
-    -  ==> 表示给数据库发送的
-    -  <==  表示数据库返回的
-
-
-
-## **第三步：创建并扫描 Mapper 接口**
-
-- 在 Spring Boot 中，你需要让 Spring 容器知道哪些接口是 MyBatis 的 Mapper，以便为它们创建代理对象并进行管理。有两种主流方式：
-
-### **方式一：使用 `@Mapper` 注解 (推荐用于少量 Mapper)**
-
-- 直接在你的 Mapper 接口上添加 `@Mapper` 注解。
-
-  ```java
-  @Mapper // 告诉 Spring Boot 这是一个 MyBatis 的 Mapper 接口
-  public interface UserMapper {
-      User findById(Long id);
-  }
-  ```
-
-  
-
-### **方式二：使用 `@MapperScan` 注解 (推荐用于大量 Mapper)**
-
-- 在你的 Spring Boot 启动类上，使用 `@MapperScan` 注解来指定一个或多个包路径，Spring Boot 会自动扫描这些包下的所有接口作为 Mapper。
-
-  ```java
-  @SpringBootApplication
-  @MapperScan("com.example.mapper") // 扫描指定包下的所有 Mapper 接口
-  public class MyApplication {
-      // ...
-  }
-  ```
-
-  
-
-## **第四步：在业务层中使用 Mapper**
-
-- 集成完成后，你就可以在你的 Service 层或其他 Spring 组件中，通过标准的依赖注入（`@Autowired`）来直接使用 Mapper 接口了
-
-  ```java
-  @Service
-  public class UserService {
-  
-      @Autowired
-      private UserMapper userMapper; // 直接注入 Mapper 接口
-  
-      public User getUserInfo(Long id) {
-          return userMapper.findById(id);
-      }
-  }
-  ```
-
-  
-
-## **第五步：声明式事务管理**
-
-- 与 Spring Boot 集成最大的好处之一就是可以无缝使用其强大的声明式事务。你只需要在需要事务的方法上添加 `@Transactional` 注解即可。
-
-  ```java
-  @Service
-  public class UserService {
-      // ...
-      @Transactional // 声明式事务
-      public void updateUser(User user) {
-          // ... 一些更新操作
-          // userMapper.update(user);
-      }
-  }
-  ```
-
-- 当这个方法被调用时，Spring 会自动开启一个事务。如果方法成功执行完毕，事务会自动提交；如果方法抛出任何未被捕获的运行时异常，事务会自动回滚。
-
-
-
-## **第六步：进阶用法与最佳实践**
-
-### **混合使用 XML 与注解**
-
-- 在 Spring Boot 环境中，XML 和注解可以完美地在**同一个 Mapper 接口**中共存
-
-  - **规则**：Spring Boot 会智能地将接口中的注解 SQL 和其同名同路径下 XML 文件中的 SQL 进行合并。
-
-  - **最佳实践**：
-    - 对于简单的、静态的 SQL，直接使用 `@Select`, `@Insert` 等注解写在接口方法上。
-    - 对于复杂的动态 SQL，在接口中只保留方法签名，将具体的 `<select>`, `<update>` 等标签写在对应的 XML 文件中。
-
-- 这种方式兼顾了注解的便捷性和 XML 的强大性，是实际项目中最灵活、最推荐的用法
-
-  
-
-### **保留并加载 `mybatis-config.xml`**
-
-- 虽然 `application.yml` 可以完成绝大多数配置，但在某些特殊场景下（如配置非常复杂的插件、自定义 `ObjectFactory` 或处理遗留项目），你可能仍希望使用传统的 `mybatis-config.xml` 文件
-
-  - **实现方式**：在 `application.yml` 中，通过 `mybatis.config-location` 属性来指定它的位置。
-
-    ```yaml
-    mybatis:
-      # 指定 mybatis-config.xml 的位置
-      config-location: classpath:mybatis-config.xml
-      # 注意：即使指定了 config-location，mapper-locations 仍然建议保留，
-      # 因为 Spring Boot 的自动扫描更强大。
-      mapper-locations: classpath:mapper/*.xml
-    ```
-
-- **注意**：一旦指定了 `config-location`，`application.yml` 中 `mybatis.configuration` 节点下的所有配置都将**失效**，MyBatis 会以 `mybatis-config.xml` 中的配置为准。
-
-
-
 # **分页插件：PageHelper**
 
 ## **1. PageHelper 是什么？**
 
-- **PageHelper** 是一个专门为 MyBatis 设计的、功能强大的第三方物理分页插件。它致力于让开发者在 MyBatis 中实现分页功能变得极其简单。
+- **PageHelper** 是一个**专门为 MyBatis 设计的**、功能强大的第三方物理分页插件。它致力于让开发者在 MyBatis 中实现分页功能变得极其简单
 
-  - **核心理念**：**非侵入式设计**。你不需要修改任何已有的 Mapper XML 或接口，只需要在你需要分页的查询前，加上一行简单的代码即可
+  - **核心理念**：**非侵入式设计**
 
-  - **工作原理**：它利用 MyBatis 的**插件接口 (`Interceptor`)**，在运行时自动拦截你即将执行的 SQL 语句。然后，它会智能地根据你的数据库类型，在你原始 SQL 的基础上，动态地拼接上对应数据库的物理分页查询语句（如 MySQL 的 `LIMIT`，Oracle 的 `ROWNUM`）
+    - 你不需要修改任何已有的 Mapper XML 或接口，只需要在你需要分页的查询前，加上一行简单的代码即可
+
+  - **工作原理**：
+
+    - 它利用 MyBatis 的**插件接口 (`Interceptor`)**，在运行时自动拦截你即将执行的 SQL 语句
+
+      然后，它会智能地根据你的数据库类型，在你原始 SQL 的基础上，动态地拼接上对应数据库的物理分页查询语句
 
 - **为什么选择它**：
-  - **简单易用**：一行代码即可实现分页。
-  - **功能强大**：自动进行 `count` 查询，返回丰富的的分页信息。
-  - **智能识别**：自动识别数据库方言。
+  
+  - **简单易用**：一行代码即可实现分页
+  - **功能强大**：自动进行 `count` 查询，返回丰富的的分页信息
+  - **智能识别**：自动识别数据库方言
   - **无缝集成**：与 Spring Boot 等主流框架完美集成
 
 
@@ -2884,7 +2881,7 @@ MyBatis 允许你通过实现 `Cache` 接口，将二级缓存替换为专业的
   <dependency>
       <groupId>com.github.pagehelper</groupId>
       <artifactId>pagehelper-spring-boot-starter</artifactId>
-      <version>1.4.6</version> <!-- 建议使用较新稳定版 -->
+      <version>X.X.X</version>
   </dependency>
   ```
 
@@ -2987,7 +2984,7 @@ public class UserService {
 
 ## 4. Page 与 PageInfo
 
-- 在使用 PageHelper 插件时，`Page` 和 `PageInfo` 是两个最核心的概念。
+- 在使用 PageHelper 插件时，`Page` 和 `PageInfo` 是两个最核心的概念
 
 ### 1. `Page<E>` 对象
 
@@ -3099,16 +3096,17 @@ public class UserService {
 
 ### 4. 最佳实践与分层思想
 
-在标准的 MVC 架构中，推荐的使用流程如下：
+- 在标准的 MVC 架构中，推荐的使用流程如下：
 
-1. **Controller 层**：接收前端的分页请求（`pageNum`, `pageSize`），并调用 Service 层的方法。
-2. **Service 层**：
-   - 调用 `PageHelper.startPage(pageNum, pageSize);`。
-   - 调用 Mapper 层的查询方法，得到 `List<T>` (实际是 `Page<T>`)。
-   - **立即**将 `List<T>` 包装成 `PageInfo<T>` 对象，即 `new PageInfo<>(list)`。
-   - 将 `PageInfo<T>` 对象返回给 Controller 层。
-3. **Controller 层**：获取到 Service 返回的 `PageInfo<T>` 对象，将其序列化成 JSON 格式，响应给前端。
-4. **前端**：解析 JSON 数据，使用 `list` 渲染数据表格，使用 `total`, `pages`, `navigatepageNums` 等属性渲染分页导航条。
+  1. **Controller 层**：接收前端的分页请求（`pageNum`, `pageSize`），并调用 Service 层的方法。
+  2. **Service 层**：
+     - 调用 `PageHelper.startPage(pageNum, pageSize);`。
+     - 调用 Mapper 层的查询方法，得到 `List<T>` (实际是 `Page<T>`)。
+     - **立即**将 `List<T>` 包装成 `PageInfo<T>` 对象，即 `new PageInfo<>(list)`。
+     - 将 `PageInfo<T>` 对象返回给 Controller 层。
+  3. **Controller 层**：获取到 Service 返回的 `PageInfo<T>` 对象，将其序列化成 JSON 格式，响应给前端。
+  4. **前端**：解析 JSON 数据，使用 `list` 渲染数据表格，使用 `total`, `pages`, `navigatepageNums` 等属性渲染分页导航条。
+
 
 
 
@@ -3123,9 +3121,7 @@ public class UserService {
   List<User> list = userMapper.findAll(); // 这个查询将不会被分页
   ```
 
-- **不要在 DAO/Mapper 层使用 PageHelper** 分页是业务逻辑的一部分，应该属于 Service 层。不要将 `PageHelper.startPage()` 的调用放在 Mapper 接口或 XML 中。
+- **不要在 DAO/Mapper 层使用 PageHelper** 分页是业务逻辑的一部分，应该属于 Service 层。不要将 `PageHelper.startPage()` 的调用放在 Mapper 接口或 XML 中
 
-- **复杂查询的支持** PageHelper 对复杂的 `JOIN` 查询和动态 SQL 提供了良好的支持。它足够智能，能够正确地将分页语句应用到复杂查询上，并生成正确的 `count` 查询。
-
-
+- **复杂查询的支持** PageHelper 对复杂的 `JOIN` 查询和动态 SQL 提供了良好的支持。它足够智能，能够正确地将分页语句应用到复杂查询上，并生成正确的 `count` 查询
 

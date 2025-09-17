@@ -1558,7 +1558,7 @@ public class AppConfig {
 
   - **`{}` 的作用**：在 `@GetMapping` 等注解的路径中，`{}` 用来定义一个**路径变量占位符**。它表示这部分 URL 是动态变化的，会作为参数传入方法。
 
-  - **场景**: 主要用于 RESTful 风格的 URL，通过唯一标识来获取、更新或删除某个特定资源，如 `GET /users/123`。
+  - **场景**: 主要用于 RESTful 风格的 URL，通过唯一标识来获取、更新或删除某个特定资源，如 `GET /users/123`
 
   - **代码示例**:
 
@@ -4081,17 +4081,17 @@ public class LoggingAspect {
 
 #### 基本概念
 
-- 你可以将 `@RestControllerAdvice` 理解为一个“**全局控制器增强器**”。它是一个特殊的 Spring 组件（`@Component`），其使命是**监听并拦截所有被 `@Controller` 注解标记的组件**。当这些组件中抛出未被捕获的异常时，它就会介入。
+- 你可以将 `@RestControllerAdvice` 理解为一个“**全局控制器增强器**”。它是一个特殊的 Spring 组件（`@Component`），其使命是**监听并拦截所有被 `@Controller` 注解标记的组件**。当这些组件中抛出未被捕获的异常时，它就会介入
 
   - **`@RestControllerAdvice` vs `@ControllerAdvice`**
 
-    - `@ControllerAdvice`：是基础注解。
+    - `@ControllerAdvice`：是基础注解
 
-      - 如果使用它，并且希望异常处理方法返回 JSON 数据，那么需要在方法上额外添加 `@ResponseBody` 注解。
+      - 如果使用它，并且希望异常处理方法返回 JSON 数据，那么需要在方法上额外添加 `@ResponseBody` 注解
 
-    - `@RestControllerAdvice`：这是 `@ControllerAdvice` 和 `@ResponseBody` 的组合体。
+    - `@RestControllerAdvice`：这是 `@ControllerAdvice` 和 `@ResponseBody` 的组合体
 
-      - 它默认该类中所有方法的返回值都将被序列化为 JSON 或 XML 格式。
+      - 它默认该类中所有方法的返回值都将被序列化为 JSON 或 XML 格式
       - 在开发前后端分离的 RESTful API 时，**强烈推荐直接使用 `@RestControllerAdvice`**，代码更简洁
 
       
