@@ -1211,20 +1211,25 @@ wrapper.nested(w -> w.gt(User::getAge, 25).like(User::getName, "张"))
 ##### `apply()`
 
 - `apply(String applySql, Object... values)`
-- `apply()` 方法可以让你在 `WHERE` 条件中拼接原生 SQL 片段。**它能有效防止 SQL 注入**
+- `apply()` 方法可以让你**在 `WHERE` 条件中拼接原生 SQL 片段**。**它能有效防止 SQL 注入**
 
-```java
-// 在 Service 层或业务代码中调用
-// 查询年龄大于25岁，并且姓名不为空的用户
-// 其中，数据库函数 'DATE_FORMAT(create_time, '%Y-%m-%d') = '2023-01-15'' 是自定义的
+  - 拼接的 原生SQL 在 `WHERE` 子句中的位置，就由它在你代码链式调用中的位置决定
+  - 第一个参数 `applySql` 之后的**所有参数（也就是 `Object... values`）**，都是用来**安全地替换 `applySql` 字符串中的占位符**的
 
-QueryWrapper<User> wrapper = new QueryWrapper<>();
-wrapper.gt("age", 25)
-       .isNotNull("name")
-       .apply("DATE_FORMAT(create_time, '%Y-%m-%d') = {0}", "2023-01-15");
+  ```java
+  // 在 Service 层或业务代码中调用
+  // 查询年龄大于25岁，并且姓名不为空的用户
+  // 其中，数据库函数 'DATE_FORMAT(create_time, '%Y-%m-%d') = '2023-01-15'' 是自定义的
+  
+  QueryWrapper<User> wrapper = new QueryWrapper<>();
+  wrapper.gt("age", 25)
+         .isNotNull("name")
+         .apply("DATE_FORMAT(create_time, '%Y-%m-%d') = {0}", "2023-01-15");
+  
+  List<User> users = userMapper.selectList(wrapper);
+  ```
 
-List<User> users = userMapper.selectList(wrapper);
-```
+  
 
 
 
