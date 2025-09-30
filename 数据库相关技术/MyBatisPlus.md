@@ -2288,6 +2288,9 @@ lambdaUpdate().set(User::getBalance,remainBalance)
 
   我喜欢**本类单表使用`IService`，其他类多表使用`Db`**
 
+- `Db.save()` 存入哪张表，完全由您传入的那个 Java 对象的类定义来决定
+  **如果没有在数据库中找到对应的表**，那么程序会**抛出异常，整个操作会失败，数据不会被存入任何地方**
+
 
 
 # 配置项
