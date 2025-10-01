@@ -195,7 +195,7 @@
 
   - **语法**:
 
-    ```bash
+    ```cmd
     FROM <image>[:<tag>] [AS <name>]
     FROM <image>@<digest> [AS <name>]
     ```
@@ -576,6 +576,54 @@
 
 
 
+## 示例
+
+```dockerfile
+# --- 阶段 1: 构建阶段 (Build Stage) ---
+# 使用一个包含完整 Maven 和 JDK 的官方镜像作为构建环境
+# 我们给这个阶段起一个别名 `build`，方便后续引用
+FROM maven:3.8.5-openjdk-17 AS build
+
+# 在容器内创建一个工作目录
+WORKDIR /app
+
+# 1. 复制 pom.xml 文件
+# 这一步是为了利用 Docker 的层缓存机制。只要 pom.xml 不变，
+# 下一步下载依赖的层就不会重新执行，从而大大加快构建速度。
+COPY pom.xml .
+
+# 2. 下载所有依赖项
+RUN mvn dependency:go-offline
+
+# 3. 复制所有源代码到容器中
+COPY src ./src
+
+# 4. 执行 Maven 打包命令，生成可执行的 .jar 文件
+# -DskipTests 会跳过测试，在 CI/CD 流程中可以加快构建
+RUN mvn package -DskipTests
+
+
+# --- 阶段 2: 运行阶段 (Runtime Stage) ---
+# 使用一个非常轻量的、仅包含 Java 运行环境 (JRE) 的官方镜像
+FROM openjdk:17-jre-slim
+
+# 在容器内创建一个工作目录
+WORKDIR /app
+
+# 从第一阶段（我们起过别名 `build`）中，
+# 将构建好的 .jar 文件复制到当前阶段的 /app 目录下，并重命名为 app.jar
+COPY --from=build /app/target/*.jar app.jar
+
+# 声明容器在运行时会监听的端口（这主要是一个文档性功能）
+EXPOSE 8080
+
+# 容器启动时要执行的最终命令
+# 使用 exec 格式 ["executable", "param1", "param2"] 是推荐的做法
+ENTRYPOINT ["java", "-jar", "app.jar"]
+```
+
+
+
 # 镜像
 
 - 简单看的话，初学者可以先把可以把 **Docker 镜像** 想象成您已经**安装完毕、静静躺在硬盘上**的**软件**
@@ -859,16 +907,22 @@
   1. **数据持久化**：确保数据在容器被删除或重建后依然存在。这对于数据库、日志文件、用户上传的内容等至关重要
   2. **数据解耦与共享**：将数据与容器的生命周期完全分离开来，使得数据可以在多个容器之间安全地共享和重用
 
-- Docker 提供了三种将数据从宿主机挂载到容器内部的机制：
+- Docker 提供了**三种将数据从宿主机挂载到容器内部的机制**：
 
   - **Volumes (数据卷)**：**官方最推荐的方式**
 
     由 Docker 进行管理，存储在宿主机文件系统的一个特定部分（通常是 **`/var/lib/docker/volumes/`**），与宿主机的核心功能完全隔离
 
     > `/var/lib/docker/volumes/`
-  
+    >
+    > 使用`docker run`指定的时候，冒号前的第一个参数**只是一个名字**，它**不是一个路径**
+
   - **Bind Mounts (绑定挂载)**：将宿主机上的**任意文件或目录**直接挂载到容器中。路径由用户完全控制
-  
+
+    > 在主机和容器之间建立一个双向同步的链接。**你在主机上修改文件，容器内会立即看到变化；反之亦然**
+    >
+    > 使用`docker run`指定的时候，冒号前的第一个参数**必须是一个宿主机上的路径**。它通常以 `/` 或 `.` 开头
+
   - **tmpfs Mounts**：一种临时挂载方式，数据只存在于宿主机的内存中，不会写入磁盘
 
 - 在一个 Docker 主机（或者说一个 Docker Daemon 实例）上，每一个**命名卷（Named Volume）的名称必须是唯一的**
@@ -890,7 +944,7 @@
 
 ## 挂载数据卷
 
-- 将数据卷“挂载”到容器这个动作，必须在创建容器时通过 **`docker run` (或 `docker create`) 命令**来完成。
+- 将数据卷“挂载”到容器这个动作，必须在创建容器时通过 **`docker run` (或 `docker create`) 命令**来完成
 
   **`docker volume` 命令**本身不具备将卷“附加”到已存在容器的功能
 
@@ -1103,7 +1157,13 @@
 
 
 
-## `yml` 常用属性
+## 对比图
+
+![image-20251002020654193](./assets/image-20251002020654193.png)
+
+
+
+## `.yml` 文件中的常用属性
 
 >docker-compose.yml
 
@@ -1113,14 +1173,16 @@
 
 ### 核心理念：服务
 
-- 在 `docker-compose.yml` 文件里，你定义的每一个 **`service`** (服务) 就像一个蓝图。Docker Compose 会根据这个蓝图去创建一个或多个功能相同的容器实例
+- 在 `docker-compose.yml` 文件里，你定义的每一个 **`service`** (服务) 就像一个蓝图。
+
+  Docker Compose 会根据这个蓝图去创建一个或多个功能相同的容器实例
 
   - **默认情况**：当你运行 `docker-compose up` 时，每个服务默认会启动 **一个** 容器
 
   - **扩展**
 
     - Docker Compose 的一个强大功能就是可以轻松地扩展服务。你可以让一个服务运行多个完全相同的容器来分担负载。例如，使用命令 `docker-compose up --scale web=3` 就会为名为 `web` 的服务启动 **三个** 容器
-
+  
       > 注意点：
       >
       > - 当您使用 `docker-compose up --scale web=3` 这样的命令来扩展服务时，Docker Compose 会自动为这三个容器生成唯一的名称，它**不会**使用 `container_name` 属性
@@ -1149,7 +1211,9 @@
 
 
 
-### 1. 顶级配置 (Top-Level Keys)
+### 具体常见配置
+
+#### 1. 顶级配置
 
 - 这些是 `docker-compose.yml` 文件最外层的配置项，用于定义整个应用的全局设置
 
@@ -1173,57 +1237,132 @@
 
   - **`secrets`** 和 **`configs`** 这两个配置项用于将敏感数据（如密码、API密钥）和非敏感配置信息（如 Nginx 配置文件）以更安全、更灵活的方式注入到服务中，而无需将它们硬编码到镜像里
 
-  - **`version`** 这个字段曾经用于指定 Compose 文件的版本规范。**在现代的 Docker Compose 中，此字段已被废弃**，是可选的且不再起作用
+  - **`version`** 这个字段曾经用于指定 Compose 文件的版本规范
+  
+    **在现代的 Docker Compose 中，此字段已被废弃**，是可选的且不再起作用
 
 
 
-### 2. 服务级配置
+#### 2. 服务级配置
 
 >`services` 下的常用属性
 
-- 在 `services` 键下，每一个子键都代表一个服务（容器）。以下是定义一个服务时最常用的属性
+- 在 `services` 键下，**每一个子键**都代表一个**服务(容器)**
 
-#### 基础配置
+  以下是定义一个**服务(容器)**时最常用的属性：
 
-- **`image`**
+##### 基础配置
 
-   指定服务所使用的 Docker 镜像
+###### **`image`**
 
-  Docker Compose 会首先在本地查找该镜像，如果找不到，则会从 Docker Hub（或你配置的其他镜像仓库）拉取
+- 用于指定服务所使用的 **预构建 Docker 镜像**。这是最直接、最常用的方式
+
+  - **指定镜像来源**：你可以指定任何存在于 Docker Hub 或其他已配置的私有镜像仓库中的镜像。
+  - **查找顺序**：当执行 `docker-compose up` 时，Compose 会首先在你的**本地**机器上查找指定的镜像。如果本地不存在，它会自动从远程仓库**拉取 (pull)**。
 
   ```yaml
-  image: node:18-alpine
+  services:
+    cache:
+      image: redis
   ```
 
+- **最佳实践**： 总是为你的镜像指定一个明确的**版本标签**（如 `:14.1-alpine`），而不是依赖于隐式的 `:latest`。这可以确保你的构建是可复现的，避免因 `latest` 标签更新而导致的意外行为。
 
 
-- **`build`** 如果你想使用自己的 `Dockerfile` 来构建镜像，而不是直接使用 `image`，就需要这个属性
 
-  你可以指定一个包含 `Dockerfile` 的路径，或者更详细地指定上下文路径和 `Dockerfile` 文件名
+###### **`build`** 
+
+- 通常用于在你自己的项目中
+
+  **如果你想使用自己的 `Dockerfile` 来构建镜像，而不是直接使用 `image`**，就需要这个属性
+
+- 你可以**指定一个包含 `Dockerfile` 的路径**，或者更详细地指定上下文路径和 `Dockerfile` 文件名
 
   ```yaml
-  # 简单用法
-  build: ./backend
+  services:
+    # 简单用法: 指定一个包含 Dockerfile 的路径
+    # Compose 会在 ./backend 目录下寻找名为 "Dockerfile" 的文件来构建镜像
+    backend:
+      build: ./backend
   
-  # 详细用法
-  build:
-    context: ./backend
-    dockerfile: Dockerfile-dev
+    # 详细用法: 使用对象来提供更精确的构建配置
+    frontend:
+      build:
+        # context: 指定 Dockerfile 的上下文路径
+        # 构建时，这个路径下的所有文件都会被发送到 Docker 守护进程
+        # Dockerfile 中的 COPY, ADD 等指令的源路径都是相对于 context 的
+        context: ./frontend 
+        
+        # dockerfile: 指定 Dockerfile 的文件名（如果不是标准的 "Dockerfile"）
+        dockerfile: Dockerfile-dev
+       
+        # args: 传递构建时参数 (Build-time arguments)
+        # 这些参数可以在 Dockerfile 中通过 ARG 指令使用
+        args:
+          - APP_VERSION=1.5.0
+          - BUILD_ENV=development
+          
+        # target: 对于多阶段构建 (Multi-stage builds)，可以指定要构建的目标阶段
+        # 这在为开发和生产环境构建不同镜像时非常有用
+        target: builder
   ```
 
-  > **注意**：如果同时指定了 `image` 和 `build`，Compose 会使用 `build` 构建镜像，并给这个镜像打上 `image` 字段指定的标签
+> **注意**：如果同时指定了 `image` 和 `build`，Compose 会使用 `build` 构建镜像，并给这个镜像打上 `image` 字段指定的标签
 
 
 
-- **`container_name`** 为该服务创建的容器指定一个固定的、自定义的名称。如果你不指定，Docker Compose 会自动生成一个名称（格式为 `<项目名>_<服务名>_<序号>`）
+###### **`container_name`** 
 
-  > **警告**：设置 `container_name` 会导致该服务无法被扩展（即无法运行 `docker-compose up --scale ...`），因为容器名称必须是唯一的
+- 为该服务创建的容器指定一个固定的、自定义的名称。如果你不指定，Docker Compose 会自动生成一个名称（格式为 `<项目名>_<服务名>_<序号>`）
+
+> **警告**：设置 `container_name` 会导致该服务无法被扩展（即无法运行 `docker-compose up --scale ...`），因为容器名称必须是唯一的
 
 
 
-#### 网络与端口
+##### 网络与端口
 
-- **`ports`** **将宿主机的端口映射到容器的端口**，格式为 `"HOST:CONTAINER"`。这样你就可以从外部访问容器内的服务
+###### **`networks`** 
+
+> 这个和顶级配置中的`networks`不同
+
+- 用于创建和管理**自定义网络**，并将你的服务连接到这些网络上
+
+  ```yaml
+  # 顶级块：在这里定义你的所有网络
+  networks:
+    frontend-net:
+      driver: bridge # 使用标准的 bridge 驱动
+    backend-net:
+      driver: bridge
+  
+  services:
+    # 前端服务，连接到 frontend-net
+    frontend:
+      image: nginx:alpine
+      networks:
+        - frontend-net
+  
+    # 后端服务，同时连接到两个网络
+    # 它可以和 frontend 通信，也可以和 db 通信
+    backend:
+      image: python:3.9-slim
+      networks:
+        - frontend-net
+        - backend-net
+  
+    # 数据库服务，只连接到 backend-net
+    # 它无法被 frontend 直接访问，增强了安全性
+    db:
+      image: postgres:14-alpine
+      networks:
+        - backend-net
+  ```
+
+
+
+###### **`ports`** 
+
+- 用于**将宿主机的端口映射到容器的端口**，这是让外部流量（例如来自你的浏览器的请求）能够访问容器内服务的唯一方式
 
   ```yaml
   ports:
@@ -1233,7 +1372,9 @@
 
 
 
-- **`expose`** 仅在容器网络内部暴露端口，供网络内的其他服务访问，但**不会**将端口映射到宿主机
+###### **`expose`**
+
+-  仅在容器网络内部暴露端口，供网络内的其他服务访问，但**不会**将端口映射到宿主机
 
   ```yaml
   expose:
@@ -1242,37 +1383,115 @@
 
 
 
-- **`networks`** 将服务连接到一个或多个在顶级 `networks` 部分定义的网络
+##### 数据与存储
 
-  ```yaml
-  networks:
-    - frontend
-    - backend
-  ```
+###### **`volumes`** 
 
+- 挂载数据卷或绑定挂载，用于持久化数据或将本地代码同步到容器中
 
+  `volumes` 主要有三种形式：**绑定挂载**、**命名卷** 和**匿名卷**
 
-#### 数据与存储
+  - **绑定挂载--开发首选**
 
-- **`volumes`** 挂载数据卷或绑定挂载，用于持久化数据或将本地代码同步到容器中
+    > 这个破玩意我以前在没有接触DockerCompose的时候居然没有深入了解过，当时还想着算了，没想到这里遇到了
+    >
+    > 其实它对应`docker run -v /your/local/path:/container/path` 这种用法，只是之前没有在意罢了哈哈哈哈
+    >
+    > 如果是这种形式 : 使用`docker run`指定的时候，冒号前的第一个参数**必须是一个宿主机上的路径**。它通常以 `/` 或 `.` 开头
 
-  ```yaml
-  volumes:
-    # 命名卷 (推荐用于数据持久化)
-    - db_data:/var/lib/mysql
+    - 绑定挂载是将主机（你的电脑）上的一个文件或目录直接映射到容器内的一个路径
+
+      - **核心作用**：在主机和容器之间建立一个双向同步的链接。**你在主机上修改文件，容器内会立即看到变化；反之亦然**
+
+      - **最佳使用场景**：**开发环境**⭐
+
+        你可以用你喜欢的代码编辑器在主机上修改源代码，而运行在容器内的应用（如 Node.js、Python Flask）可以自动重载，无需重新构建镜像
+
+    - **语法和示例**
+
+    ```yaml
+    services:
+      web:
+        build: .
+        volumes:
+          # 将主机当前目录下的 src 文件夹挂载到容器的 /app 目录
+          - ./src:/app
+    
+          # 还可以挂载单个文件，如配置文件
+          - ./nginx.conf:/etc/nginx/nginx.conf
+    
+          # :ro 表示只读挂载 (read-only)
+          # 容器内只能读取该文件，无法修改，增强安全性
+          - ./config.json:/etc/config.json:ro
+    ```
+
   
-    # 绑定挂载 (推荐用于开发时同步代码)
-    - ./src:/app
-  
-    # 只读绑定挂载
-    - ./config.json:/etc/config.json:ro
-  ```
+
+  - **命名卷--数据持久化最佳实践**
+
+    > 这个就是我们在学习 DockerCompose 之前使用 **`docker volume` 命令** 管理和创建的命名卷，这个是之前的权威用法
+    >
+    > 这种形式的话：使用`docker run`指定的时候，冒号前的第一个参数**只是一个名字**，它**不是一个路径**
+
+    - 命名卷是由 Docker 引擎完全管理的数据卷
+
+      你只需要给它起一个名字，Docker 会负责在主机上一个特殊的目录（如 `/var/lib/docker/volumes/`）中创建和管理它
+
+      - **核心作用**：将应用数据（如数据库文件、用户上传内容）与容器解耦，安全地持久化
+
+      - **最佳使用场景**：**生产环境**和任何需要持久化应用数据的场景
+
+    - **语法和示例**
+
+      - 命名卷的使用分为两步：在顶级 `volumes` 块中**声明**，然后在服务中**使用**
+
+        ```yaml
+        # 顶级块：在这里声明你要使用的所有命名卷
+        volumes:
+          db_data:
+            # 还可以指定驱动或驱动选项
+            # driver: local
+          wp_files:
+        
+        services:
+          db:
+            image: mysql:8.0
+            environment:
+              - MYSQL_ROOT_PASSWORD=secret
+            volumes:
+              # 将名为 "db_data" 的命名卷挂载到容器的 MySQL 数据目录
+              - db_data:/var/lib/mysql
+        
+          wordpress:
+            image: wordpress
+            ports:
+              - "8080:80"
+            volumes:
+              # 将名为 "wp_files" 的命名卷挂载到 WordPress 的文件目录
+              - wp_files:/var/www/html
+        ```
+
+    
+
+  - **匿名卷--尽量避免**
+
+    - 如果你在挂载时不指定主机路径（绑定挂载）或卷名（命名卷），Docker 会创建一个匿名卷
+
+      ```yaml
+      volumes:
+        # 这会创建一个匿名卷，名字是一长串随机哈希值
+        - /var/lib/mysql
+      ```
+
+    - 匿名卷虽然也能持久化数据，但因为没有固定的名字，很难再次引用它或进行管理。**通常不推荐使用**
 
 
 
-#### 命令与执行环境
+##### 命令与执行环境
 
-- **`command`** 覆盖容器启动时默认执行的命令（即覆盖 `Dockerfile` 中的 `CMD` 指令）
+###### **`command`** 
+
+- 覆盖容器启动时默认执行的命令（即覆盖 `Dockerfile` 中的 `CMD` 指令）
 
   ```yaml
   command: ["npm", "run", "dev"]
@@ -1282,35 +1501,79 @@
 
 
 
-- **`entrypoint`** 覆盖容器的入口点（即覆盖 `Dockerfile` 中的 `ENTRYPOINT` 指令）
+###### **`entrypoint`**
+
+- 覆盖容器的入口点（即覆盖 `Dockerfile` 中的 `ENTRYPOINT` 指令）
 
   ```yaml
-  entrypoint: /docker-entrypoint.sh
+  services:
+    # 示例 1: 调试一个无法启动的容器
+    # 覆盖默认的 entrypoint，直接进入 shell
+    broken-app:
+      image: my-app-image
+      entrypoint: /bin/sh
+      # 启动后，你可以手动执行原有的命令来查找问题
+  
+    # 示例 2: 禁用一个镜像的默认 entrypoint 脚本
+    # 有些镜像（如 postgres）有一个复杂的启动脚本作为 entrypoint
+    # 设置为空即可禁用它
+    db:
+      image: postgres:14
+      entrypoint: ""
+      command: ["postgres", "-c", "max_connections=200"]
   ```
 
 
 
-- **`working_dir`** 指定容器内命令执行的工作目录
+###### **`working_dir`**
+
+- 用于覆盖镜像中由 `Dockerfile` 的 `WORKDIR` 指令设置的默认工作目录
 
   ```yaml
-  working_dir: /app
+  services:
+    api:
+      image: my-api
+      # 确保所有命令都在 /var/www/html 目录下执行
+      working_dir: /var/www/html
+      # 如果不设置 working_dir，你可能需要写成 command: ["php", "/var/www/html/artisan", "serve"]
+      command: ["php", "artisan", "serve"]
   ```
 
 
 
-#### 环境与配置
+##### 环境与配置
 
-- **`environment`** 在容器内设置环境变量
+###### **`environment`** 
+
+- 允许你直接在 `docker-compose.yml` 文件中为服务设置一个或多个环境变量。可以快速、直接地注入配置
 
   ```yaml
-  environment:
-    - NODE_ENV=production
-    - DB_HOST=database
+  services:
+    app:
+      image: my-app
+      # 格式一：数组 (Array)
+      # 格式为 "KEY=VALUE"
+      environment:
+        - NODE_ENV=production
+        - API_URL=[http://api.internal](http://api.internal)
+        - RETRY_COUNT=5
+  
+    db:
+      image: postgres:14
+      # 格式二：字典 (Dictionary/Map)
+      # 这种格式更易读，尤其是当值比较长或者包含特殊字符时
+      environment:
+        POSTGRES_USER: "user"
+        POSTGRES_DB: "mydatabase"
+        # 如果值为空，则会从运行 docker-compose 命令的 Shell 环境中获取
+        POSTGRES_PASSWORD:
   ```
 
 
 
-- **`env_file`** 从一个或多个文件加载环境变量，这有助于将配置与 `docker-compose.yml` 文件分离
+###### **`env_file`**
+
+-  从一个或多个文件加载环境变量，这有助于将配置与 `docker-compose.yml` 文件分离
 
   ```yaml
   env_file:
@@ -1320,52 +1583,141 @@
 
 
 
-#### 生命周期与健康检查
+##### 生命周期与健康检查
 
-- **`restart`** 定义容器退出时的重启策略
+###### **`restart`** 
+
+- 定义容器退出时的重启策略
 
   - `no`：默认值，不重启
+
   - `always`：无论退出状态码是什么，总是重启
+
   - `on-failure`：仅当退出状态码表示错误时才重启
 
-  ```yaml
-  restart: always
-  ```
+
+```yaml
+restart: always
+```
 
 
 
-- **`depends_on`** 定义服务间的依赖关系，这会影响服务的启动顺序。例如，`webapp` 依赖于 `db`，那么 `db` 服务会先于 `webapp` 启动
+###### **`depends_on`** 
 
-  > **重要**：`depends_on` 只保证**启动顺序**，并不保证被依赖服务内的应用程序已经准备好接收请求
+- 主要功能是**控制服务的启动顺序**。
+
+  如果你定义服务 `A` 依赖于服务 `B`，那么 Docker Compose 会确保先启动服务 `B`，然后再启动服务 `A`
+
+> **重要**：
+>
+> - `depends_on`有一个天生的局限：它只知道依赖的容器**已经启动**，但不知道容器内的应用程序是否**已经就绪**
+>   一个数据库容器可能已经启动，但其内部的数据库服务可能还需要几十秒钟来初始化
+
+- 示例：
 
   ```yaml
   services:
-    webapp:
+    backend:
       build: .
+      # backend 服务会在 db 和 redis 启动之后才启动
       depends_on:
         - db
         - redis
+      networks:
+        - my-network
+  
     db:
-      image: postgres
+      image: postgres:14-alpine
+      networks:
+        - my-network
+  
     redis:
-      image: redis
+      image: redis:alpine
+      networks:
+        - my-network
   ```
 
+  - 在这个例子中，`docker-compose up` 的启动顺序会是：
+    1. 启动 `db` 和 `redis`
+    2. 等待 `db` 和 `redis` 的容器都**已启动**后，再启动 `backend` 服务
 
 
-- **`healthcheck`** 定义一个健康检查命令，Docker 会定期运行它来判断容器是否处于“健康”状态。这对于控制服务依赖关系（例如，等待数据库完全就绪）非常有用
+
+###### **`healthcheck`** 
+
+- 它允许你定义一个命令，让 Docker 定期在容器内部运行这个命令来检查应用程序的真实健康状态
+
+- `healthcheck` 的核心配置项
+
+  你可以在 `docker-compose.yml` 的服务下添加一个 **`healthcheck` 块**来定义健康检查
 
   ```yaml
-  healthcheck:
-    test: ["CMD", "curl", "-f", "http://localhost"]
-    interval: 30s
-    timeout: 10s
-    retries: 3
+  services:
+    api:
+      image: my-api
+      healthcheck:
+        # test: 【必需】这是核心，定义了如何进行健康检查的命令。
+        # 命令的退出状态码决定了检查结果：
+        # - 退出码 0: 表示成功 (healthy)
+        # - 退出码 1: 表示失败 (unhealthy)
+        test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+  
+        # interval: 检查的间隔时间（默认 30s）
+        interval: 10s
+  
+        # timeout: 单次检查的超时时间（默认 30s）
+        # 如果检查命令超过这个时间还没结束，就被视为失败
+        timeout: 5s
+  
+        # retries: 重试次数（默认 3）
+        # 在被标记为 "unhealthy" 之前，需要连续失败多少次
+        retries: 3
+  
+        # start_period: 启动宽限期（可选）
+        # 为需要较长启动时间的服务提供一个初始化周期。
+        # 在这个周期内，即使健康检查失败也不会计入重试次数。
+        start_period: 40s
+  ```
+
+  - **`test` 命令的两种格式**
+    - `CMD`: `test: ["CMD", "executable", "arg1", "arg2"]`
+      - 直接执行命令，没有 shell 包装。这是**推荐**的格式
+    - `CMD-SHELL`: `test: ["CMD-SHELL", "some_command && another_command"]`
+      - 在 shell 中执行命令 (`/bin/sh -c ...`)。当你需要使用 shell 特性（如管道 `|`、与 `&&`）时使用
+
+###### `depends_on`和`healthcheck`联动
+
+- **示例：Web 应用等待数据库就绪**
+
+  ```yaml
+  services:
+    web:
+      build: .
+      ports:
+        - "8000:8000"
+      depends_on:
+        # 使用长格式语法
+        db:
+          # web 服务会一直等待，直到 db 服务的健康检查状态变为 "healthy"
+          condition: service_healthy
+  
+    db:
+      image: postgres:14
+      environment:
+        - POSTGRES_DB=mydb
+        - POSTGRES_USER=user
+        - POSTGRES_PASSWORD=pass
+      healthcheck:
+        # 使用 PostgreSQL 的工具 pg_isready 来检查数据库是否准备好接受连接
+        test: ["CMD-SHELL", "pg_isready -U user -d mydb"]
+        interval: 5s
+        timeout: 5s
+        retries: 5
   ```
 
 
 
-### 3. 综合示例
+#### 3. 综合示例
 
 ```yaml
 # 'services' - 定义应用的所有服务（容器）
@@ -1479,7 +1831,69 @@ volumes:
 
 
 
-## 常用命令
+## DockerCompose常用命令
+
+- 命令的核心设计就是为了方便，命令会自动检测并使用当前工作目录下的 `docker-compose.yml` 或 `docker-compose.yaml` 文件
+
+  > 所以啊，命令直接用就行，可能刚开始学习使用的时候感觉怪怪的，咋直接就刷刷刷地用了，啥也不需要知道，因为会自动检测的
+
+
+
+### 0. 语法
+
+```cmd
+docker compose 命令 [选项] [服务名...]
+```
+
+- **常用全局选项**:
+
+  - `-f, --file <文件名>`：
+
+    指定一个或多个 `docker-compose.yml` 配置文件
+    默认情况下，它会查找当前目录下的 `docker-compose.yml`
+
+    ```bash
+    docker compose -f docker-compose.prod.yml up
+    ```
+
+  - `-p, --project-name <项目名>`：
+
+    为本次操作指定一个项目名称
+    Docker Compose 会用这个名字作为容器、网络等资源名称的前缀，以避免不同项目间的冲突
+
+    ```bash
+    docker compose -p my_awesome_project ps
+    ```
+
+  - `--profile <配置组名>`
+
+    激活在 `docker-compose.yml` 中使用 `profiles` 定义的服务
+    这允许你定义一组可选的服务，只在需要时启动它们
+
+  - `--env-file <文件路径>`：
+
+    指定一个 `.env` 文件，文件中的变量可以用于 Compose 文件中的变量替换
+
+- **示例**:
+
+  ```bash
+  # 使用一个名为 'dev.yml' 的配置文件，在后台启动所有服务
+  docker compose -f dev.yml up -d
+  
+  # 在默认项目中，只查看 'web' 和 'db' 两个服务的日志
+  docker compose logs -f web db
+  
+  # 在一个名为 'my_api' 的项目中，强制重新构建 'backend' 服务的镜像
+  docker compose -p my_api build --no-cache backend
+  
+  # 停止默认项目中的 'worker' 服务
+  docker compose stop worker
+  
+  # 在 'db' 服务容器内打开一个交互式的 bash shell
+  docker compose exec db bash
+  ```
+
+
 
 ### 1. 应用生命周期管理
 
@@ -1659,7 +2073,7 @@ docker compose restart [选项] [服务名...]
 
 > Service Status Inquiry
 
-- 这是 Docker Compose 的“仪表盘”或“任务管理器”，用于快速查看当前项目中所有服务的容器状态
+- 这是 Docker Compose 的“仪表盘”或“任务管理器”，用于快速查看**当前项目中所有服务的容器状态**
 
 ```cmd
 docker compose ps [选项] [服务名...]
@@ -1812,7 +2226,7 @@ docker compose build [选项] [服务名...]
 
 - 此命令用于从镜像仓库（如 Docker Hub）中，拉取 `docker-compose.yml` 文件里定义的服务所需要的镜像
 
-```
+```cmd
 docker compose pull [选项] [服务名...]
 ```
 
@@ -1901,7 +2315,7 @@ docker compose exec [选项] <服务名> <要执行的命令>
 
 - 此命令用于删除指定服务的**已停止**的容器。
 
-```
+```cmd
 docker compose rm [选项] [服务名...]
 ```
 
