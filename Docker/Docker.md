@@ -578,6 +578,8 @@
 
 ## 示例
 
+### Dockerfile
+
 ```dockerfile
 # --- 阶段 1: 构建阶段 (Build Stage) ---
 # 使用一个包含完整 Maven 和 JDK 的官方镜像作为构建环境
@@ -623,6 +625,45 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 ```
 
 
+
+### 如何使用这个 `Dockerfile`
+
+1. **放置文件**：将上面这个 `Dockerfile` 文件放在你 Java 项目的根目录下（与 `pom.xml` 同级）
+
+2. **构建镜像**：在项目根目录下打开终端，运行以下命令：
+
+   ```bash
+   # -t my-java-app:latest  给你的镜像起一个名字(tag)
+   # .                    	 告诉 Docker 在当前目录下查找 Dockerfile
+   docker build -t my-java-app:latest .
+   ```
+
+3. **运行容器**：镜像构建成功后，使用 `docker run` 命令来启动你的应用容器：
+
+   ```bash
+   # -p 8080:8080  将你主机的 8080 端口映射到容器的 8080 端口
+   # my-java-app:latest  指定要运行的镜像
+   docker run -p 8080:8080 my-java-app:latest
+   ```
+
+   现在，你的 Java 应用就在 Docker 容器里成功运行起来了！
+
+4. 与 Docker Compose 结合
+
+   - 当你使用 Docker Compose 时，这个 `Dockerfile` 可以被非常简单地集成
+
+     在 `docker-compose.yml` 文件中，你只需要这样做：
+
+     ```yaml
+     services:
+       my-app:
+         build: .  # 告诉 Compose 使用当前目录下的 Dockerfile 来构建镜像
+         ports:
+           - "8080:8080"
+         # ... 其他配置，比如环境变量、网络等
+     ```
+
+   
 
 # 镜像
 
