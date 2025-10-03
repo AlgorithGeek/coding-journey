@@ -229,9 +229,9 @@
 
   - **最佳实践**
 - **优先使用专用注解**：在开发中，应优先使用 `@Controller`, `@Service`, `@Repository` 等专用注解，因为它们不仅能让代码的意图和分层结构一目了然，还能启用框架的特定附加功能
-    
+  
 - **明确数据访问方式**：如果项目使用 MyBatis，数据访问层的接口应使用 `@Mapper` 注解。如果使用 Spring Data JPA，则通常继承 `JpaRepository` 接口，并用 `@Repository` 标注
-    
+  
 - **`@Component` 的使用时机**：只有当一个组件不适合明确归入以上任何一层时（例如，一个通用的工具类、配置类、拦截器等），才使用通用的 `@Component` 注解
 
 
@@ -1804,7 +1804,6 @@ public class UserServiceImpl implements UserService {
       @Transactional(readOnly = true)
       ```
   
-
 - **`timeout` (int)**: 设置事务的超时时间(秒)。如果事务执行时间超过该值，将被强制回滚
 
 
@@ -1860,7 +1859,7 @@ public class UserServiceImpl implements UserService {
        ```
 
 
-   
+
 
 4. **数据库引擎不支持事务**
 
@@ -4468,34 +4467,35 @@ class Computer {
 
 - 每个 Spring Boot 应用都有一个带有 `main` 方法的启动类，它是整个应用的**唯一入口**和**配置中心**
 
-  其核心是 `@SpringBootApplication` 注解，它是一个组合注解，包含了三个关键功能：
+  其核心是 `@SpringBootApplication` 注解，它实际上是一个**复合注解**，主要由以下三个注解组成：
 
   - **`@ComponentScan` (扫描组件)**:
-
     -  告诉 Spring 从哪里开始扫描你的类（`@Component`, `@Service` 等）以注册为 Bean
-      - **默认规则**: 默认的扫描路径是该注解所在类**所处的包**及其所有子包
-      - **最佳实践**: 将启动类放在项目的根包下(如 `com.example.myapp`)，这样它就能自然地扫描到所有业务代码，无需额外配置
+      - **默认规则**：默认的扫描路径是该注解所在类**所处的包**及其所有子包
+      - **最佳实践**：
+        - 将启动类放在项目的根包下(如 `com.example.myapp`)，这样它就能自然地扫描到所有业务代码，无需额外配置
 
-    
+  
+  
+  
+  - **`@SpringBootConfiguration` (声明为配置类)**
+  
+    - 这本质上就是 `@Configuration` 注解
+  
+      它允许你在启动类中也通过 `@Bean` 注解来手动定义 Bean，从而将启动类本身也作为一个配置源
+      
+      
 
   - **`@EnableAutoConfiguration` (开启自动配置)**: 
 
-    - 这是 Spring Boot 的“魔法”核心。它会根据你项目中引入的 `starter` 依赖，智能地、自动地配置应用所需的各种 Bean
+    - 这是 Spring Boot 的**“魔法”核心**。它会根据你项目中引入的 `starter` 依赖，智能地、自动地配置应用所需的各种 Bean
 
       - **工作原理**: 
 
         - Spring Boot 会扫描所有依赖包中的
           `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 文件（旧版本为 `spring.factories`），加载其中定义的自动配置类
-
+  
         - 这些配置类会根据条件（如 classpath 中是否存在某个类）来决定是否生效
-
-    
-
-  - **`@SpringBootConfiguration` (声明为配置类)**
-
-    - 这本质上就是 `@Configuration` 注解
-
-      它允许你在启动类中也通过 `@Bean` 注解来手动定义 Bean，从而将启动类本身也作为一个配置源
 
 
 
@@ -4556,6 +4556,10 @@ class Computer {
 
   它的唯一职责就是告诉 Spring **从哪些包中去寻找和发现被特定注解（如 `@Component`, `@Service`, `@Repository`, `@Controller` 等）标记的类，并将它们自动注册为 Spring IoC 容器中的 Bean**
 
+- **当不带任何参数使用时，它会扫描该注解所在的类所在的包以及其下的所有子包**
+
+  > 一旦你为 `@ComponentScan` (或者通过 `@SpringBootApplication` 间接使用时) 提供了任何自定义扫描参数（如 `basePackages`），那么它的默认扫描行为就会被完全覆盖
+
 - 在 Spring Boot 项目中，我们通常在主启动类上看到的 `@SpringBootApplication` 注解，其内部就已经包含了 `@ComponentScan`
 
   这也是为什么 Spring Boot 能够“自动”发现我们项目中的组件，实现了约定优于配置的核心理念
@@ -4584,13 +4588,17 @@ class Computer {
 
 - `@ComponentScan` 提供了多个属性，让我们能够灵活地定制扫描行为
 
+- **当不带任何参数使用时，它会扫描该注解所在的类所在的包以及其下的所有子包**
+
+  > 一旦你为 `@ComponentScan` (或者通过 `@SpringBootApplication` 间接使用时) 提供了任何自定义扫描参数（如 `basePackages`），那么它的默认扫描行为就会被完全覆盖
+
 ##### 3.1. `basePackages` (或 `value`)
 
 - 这是最常用的属性，用于明确指定一个或多个需要扫描的基础包路径。`value` 是 `basePackages` 的别名
 
   - **类型**: `String[]` (字符串数组)
 
-  - **作用**: 定义扫描的起始包。Spring 会递归扫描这些包及其所有子包。
+  - **作用**: 定义扫描的起始包。Spring 会递归扫描这些包及其所有子包
 
 - **示例：**
 
@@ -4674,7 +4682,7 @@ class Computer {
 
 ##### 4.2. `excludeFilters`
 
-- 用于在扫描过程中排除掉符合条件的组件。
+- 用于在扫描过程中排除掉符合条件的组件
 
   - **示例：扫描所有组件，但排除所有 Controller**
 
@@ -4738,7 +4746,7 @@ public class AppConfig {
 
 ### `@Import` 注解
 
-#### 0.`@Import` 简述
+#### 0. `@Import` 简述
 
 - `@Import` 注解是 Spring 框架提供的一个功能强大且灵活的工具，用于**精确地、显式地**将一个或多个类的定义导入到当前的 Spring IoC 容器中
 
@@ -4746,7 +4754,7 @@ public class AppConfig {
 
 
 
-#### 1.特点
+#### 1. 注解的特点
 
 - 被 `@Import` 注解直接导入的普通类，无论它自己身上有没有 `@Component`、`@Service` 等注解，都会被 Spring IoC 容器注册为一个 Bean 并进行管理
 
@@ -4992,9 +5000,527 @@ public class AppConfig {
   >
   > > 其实我感觉甚至都不需要我们自己来引入，可能会自动地通过某种东西来引入，目前还没学到，但是我已经想到了，就是导入依赖后，通过某种东西，来进行检测，之后直接把这些东西自动引入，我们甚至都不需要再去疯狂写那些相关的细节方面的东西.....
   > >
-  > > emmm，果然还是不够熟悉，思考得好模糊，哈哈哈哈
+  > > emmm，果然目前还是不够熟悉，思考得好模糊，哈哈哈哈
 
 
 
-# 自定义`starter`
+## 自动配置
 
+- 实现它的注解是**`@EnableAutoConfiguration`**，这绝对是 Spring Boot 中最核心、最具魔力的注解之一
+
+### `@EnableAutoConfiguration`
+
+#### 本质
+
+- `@EnableAutoConfiguration` 注解本身并不复杂
+
+  其最关键的部分在于它使用了 `@Import` 注解来导入一个非常重要的类：**`AutoConfigurationImportSelector`**
+
+  **注解源码如下**
+
+  ```java
+  @Target({ElementType.TYPE})
+  @Retention(RetentionPolicy.RUNTIME)
+  @Documented
+  @Inherited
+  @AutoConfigurationPackage // 另一个辅助注解，用于确定扫描包的范围
+  @Import({AutoConfigurationImportSelector.class}) // <-- 关键点在这里！
+  public @interface EnableAutoConfiguration {
+      // ...
+  }
+  ```
+
+  而 **`AutoConfigurationImportSelector`** 这个类，顾名思义，它的核心职责就是**选择并导入**需要生效的自动配置类
+
+
+
+#### `AutoConfigurationImportSelector`类
+
+##### 本质
+
+- 一个特殊的 `ImportSelector`
+
+  `AutoConfigurationImportSelector` 类实现了 Spring 框架的 `ImportSelector` 接口
+
+  - `ImportSelector` 接口中只有一个核心方法：`selectImports()`
+
+    当 Spring 容器在处理 `@Configuration` 类时，如果发现 `@Import` 注解导入了一个 `ImportSelector` 的实现类，它就会调用这个实现类的 `selectImports()` 方法，并期望该方法返回一个**字符串数组**，数组内容就是**需要被导入的配置类的全限定名**
+
+
+
+##### 核心工作流程
+
+- `AutoConfigurationImportSelector` 的 `selectImports` 方法内部逻辑严谨，可以概括为以下几个关键步骤：
+
+
+
+###### **第一步：获取所有候选的自动配置类**
+
+- 这一步的目标是**找到所有可能用到的自动配置类**
+
+  Spring Boot 并不会去扫描你项目里的所有类来寻找配置
+  这样做效率太低，而且容易出错
+  相反，它依赖于一个**“约定”**，即**所有可用的自动配置类都必须在某个约定的文件里进行注册**
+
+  
+
+  - **A. 传统机制 (Spring Boot 2.7 之前): `META-INF/spring.factories`**
+
+    - 在早期版本中，`spring.factories` 文件是 Spring Boot 服务发现的基石
+
+      - **文件位置**
+
+        - 这个文件位于所有 Spring Boot Starter 或 `autoconfigure` 包的 `META-INF/` 目录下
+
+        最核心的一个就在 `spring-boot-autoconfigure-{version}.jar` 包里
+
+      - **文件格式**
+
+        - 这是一个标准的 Java Properties 文件，采用 `Key=Value` 的格式
+
+          `Value` 可以是多个，用逗号 `,` 分隔
+
+      - **关键的 Key**
+        - 对于自动配置功能，`AutoConfigurationImportSelector` 只关心一个特定的 Key：`org.springframework.boot.autoconfigure.EnableAutoConfiguration`
+
+      - **`spring.factories` 文件内容示例：**
+
+        ```properties
+        # Auto Configure
+        org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+        org.springframework.boot.autoconfigure.aop.AopAutoConfiguration,\
+        org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration,\
+        org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration,\
+        org.springframework.boot.autoconfigure.cache.CacheAutoConfiguration,\
+        org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,\
+        org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration
+        # ... 还有一百多个类名
+        ```
+
+        
+
+    - **加载过程**:
+      1. `AutoConfigurationImportSelector` 内部会使用一个名为 `SpringFactoriesLoader` 的工具类
+      2. `SpringFactoriesLoader.loadFactoryNames()` 方法被调用，并传入关键的 Key (`EnableAutoConfiguration.class.getName()`)
+      3. `SpringFactoriesLoader` 会扫描整个应用的 classpath，找出**所有** JAR 包中的 `META-INF/spring.factories` 文件
+      4. 它会解析每一个找到的 `spring.factories` 文件，读取 `org.springframework.boot.autoconfigure.EnableAutoConfiguration` 这个 Key 下面的所有类名
+      5. 最后，它会将从**所有**文件中找到的类名合并成一个大的列表，并**去除重复项**
+
+  
+
+  - **B. 现代机制 (Spring Boot 2.7 及之后)**
+
+    **`META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`**
+
+    - 为了提升性能，Spring Boot 2.7 引入了一种新的、更简洁的机制来专门加载自动配置类
+
+      - **文件位置**:
+        
+        - `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
+        
+      - **文件格式**: 
+        -  这是一个纯文本文件
+        - 不再有 Key-Value 格式，而是**每一行就是一个完整的自动配置类的全限定名**。注释以 `#` 开头
+      
+      - **`.imports` 文件内容示例：**
+      
+        ```properties
+        # Auto-configuration Imports
+        org.springframework.boot.autoconfigure.aop.AopAutoConfiguration
+        org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+        org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration
+        org.springframework.boot.autoconfigure.cache.CacheAutoConfiguration
+        org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+        org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration
+        # ...
+        ```
+    
+    
+    
+    - **加载过程**:
+      1. 这个过程不再需要解析复杂的 Properties 文件，只需要逐行读取文件内容即可，性能更高
+      2. Spring Boot 依然会扫描 classpath 下所有 JAR 包中该路径下的 `.imports` 文件
+      3. 同样，它会把所有找到的类名合并成一个列表并去重
+      4. 为了向后兼容，如果新版 Spring Boot 在 `.imports` 文件中没有找到内容，它仍然会去检查旧的 `spring.factories` 文件
+
+
+
+- **第一步结果**：
+  - 这一步会得到一个包含上百个自动配置类全限定名的巨大列表。它里面包含了很多当前项目并不需要的配置
+
+
+
+###### **第二步：移除被排除的配置类**
+
+- 这一步是**检查并移除 开发者明确指定 要禁用的自动配置**
+
+
+
+- 两种核心的排除方式
+
+  - Spring Boot 提供了两种灵活的方式来指定排除项，它们的效果是完全相同的
+
+    - **方式一：通过注解属性 (`exclude` / `excludeName`)**
+
+      - 这是在代码层面进行排除，直观且具有高可读性
+
+        你可以在主启动类的 `@SpringBootApplication` 注解（或者直接在 `@EnableAutoConfiguration` 注解上）设置 `exclude` 或 `excludeName` 属性
+
+        - `exclude`：
+
+          - 接收一个 `Class<?>` 类型的数组，需要直接引用配置类的 `.class` 文件
+          - 这是类型安全的方式，推荐首选
+
+          - **示例：禁用数据源和 Redis 的自动配置**
+
+            ```java
+            import org.springframework.boot.autoconfigure.SpringBootApplication;
+            import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration;
+            import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+            
+            @SpringBootApplication(exclude = {DataSourceAutoConfiguration.class, RedisAutoConfiguration.class})
+            public class MyApplication {
+                public static void main(String[] args) {
+                    SpringApplication.run(MyApplication.class, args);
+                }
+            }
+            ```
+
+        - `excludeName`：
+
+          - 接收一个 `String[]` 类型的数组，需要填写配置类的全限定名字符串
+          - 当无法直接引用类（比如避免循环依赖或类不在当前模块的直接依赖中）时使用
+
+          - **示例：**
+
+            ```java
+            @SpringBootApplication(excludeName = {
+                "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration",
+                "org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration"
+            })
+            public class MyApplication { ... }
+            ```
+
+    
+
+    - **方式二：通过配置文件 (`spring.autoconfigure.exclude`)**	
+
+      - 这是在配置层面进行排除，优点是不需要修改代码，可以根据不同的环境（dev, prod）配置不同的排除项
+
+        - **文件**: `application.properties` 或 `application.yml`
+
+        - **属性**: `spring.autoconfigure.exclude`
+
+        - **值**: 一个或多个自动配置类的全限定名，用逗号分隔
+
+        - **`application.properties` 示例：**
+
+          ```properties
+          # 禁用数据源和Redis的自动配置
+          spring.autoconfigure.exclude=
+          org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,
+          org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+          ```
+
+
+
+- **内部执行过程**
+
+  - 在 `selectImports` 方法内部，它会执行以下操作：
+    1. **获取注解排除项**：通过 `AnnotationMetadata` (描述了主启动类上的注解信息)，读取 `exclude` 和 `excludeName` 属性中的类列表
+    2. **获取配置排除项**：从 Spring 的 `Environment` 对象中，读取 `spring.autoconfigure.exclude` 属性的值
+    3. **合并排除列表**：将从上述两个来源获取到的所有要排除的类名合并成一个 `Set<String>` 集合
+    4. **执行排除**：遍历第一步收集到的庞大“候选人”清单（`List<String>`），并从中移除所有出现在这个“排除列表”中的类
+
+  - **执行**：`AutoConfigurationImportSelector` 会获取这些排除项，并从第一步得到的庞大候选清单中将它们精确地移除
+
+
+
+###### **第三步：智能过滤与排序**
+
+- 执行智能过滤，并对所有候选配置进行精确排序
+
+- 智能过滤
+
+  - 除了第二步中**由开发者定义的“硬性排除”**，
+
+    Spring Boot 还提供了一套更灵活、更具编程性的过滤机制——**`AutoConfigurationImportFilter`**
+
+    这允许框架或高级用户根据复杂的逻辑动态地过滤掉某些配置
+
+    - `AutoConfigurationImportFilter`
+
+      - **它的角色**
+
+        - 这是一个标准的 SPI (Service Provider Interface) 接口，它定义了一套“过滤器”的规范
+
+          任何实现了这个接口的类，都能参与到自动配置的筛选流程中
+
+          这提供了一个极佳的扩展点，允许框架或高级用户根据自定义的复杂逻辑来动态过滤配置
+
+      - **核心方法**
+
+        - 该接口的核心方法是 `match()`，它接收**所有当前候选的**自动配置类名数组，然后返回一个等长的**布尔数组**
+
+          数组中每个位置的 `true` 或 `false`，就代表对应位置的那个自动配置类是通过了该过滤器的检查，还是应该被淘汰
+
+          ```java
+          boolean[] match(
+              String[] autoConfigurationClasses, 
+              AutoConfigurationMetadata autoConfigurationMetadata
+          );
+          ```
+
+      
+
+      - **如何被发现**
+
+        - 与自动配置类本身一样
+
+          `AutoConfigurationImportFilter` 的实现类也是通过 `spring.factories` 文件被 Spring Boot 发现和加载的
+
+          框架会查找所有 JAR 包中 `spring.factories` 文件里以 `org.springframework.boot.autoconfigure.AutoConfigurationImportFilter` 为 Key 的条目
+
+  
+
+  - **核心内置过滤器：精准高效的 `OnClass` 预检查**
+
+    - Spring Boot 内部提供了一个最重要的 **`AutoConfigurationImportFilter` 实现**，它专门用于**预检查 `@ConditionalOnClass` 注解**
+
+    - **工作方式**
+      1. **直接读取注解元数据**：
+         - 它不会去完整地解析 `Condition`，而是直接读取每个**候选配置类上 `@ConditionalOnClass` 注解中**填写的类名字符串
+      2. **尝试加载类**：
+         - 拿到这些类名字符串后，它会立即尝试使用应用的类加载器去加载它们
+      3. **快速失败**：
+         - 如果在加载过程中，任何一个类抛出了 `ClassNotFoundException` 或 `NoClassDefFoundError`，就意味着这个 `@ConditionalOnClass` 条件**必然不满足**
+      4. **做出裁决**：
+         - 一旦检测到失败，`match()` 方法就会在该配置类对应的位置上标记为 `false`，从而在第一时间将其淘汰
+
+    - **优化**
+
+      - 如果一个自动配置类依赖的某个关键类（例如 `DataSourceAutoConfiguration` 依赖 `javax.sql.DataSource`）在 classpath 中根本不存在，那么这个配置类最终**一定**不会生效
+
+        与其等到后面昂贵的条件评估阶段再处理，不如现在就将它从候选清单中移除
+
+
+
+- **顺序编排**
+
+  - 自动配置类之间常常存在依赖关系。如果加载顺序不正确，应用就会启动失败
+
+    - Spring Boot 提供了两个核心的排序注解：
+
+      - **`@AutoConfigureAfter({Class...})`**: 指定当前自动配置类必须在**指定的配置类之后**加载。这是最常用的方式
+
+        ```JAVA
+        @Configuration
+        @AutoConfigureAfter({DataSourceAutoConfiguration.class}) // 我必须在数据源配置好之后运行
+        public class JdbcTemplateAutoConfiguration { ... }
+        ```
+
+      - **`@AutoConfigureBefore({Class...})`**: 指定当前自动配置类必须在**指定的配置类之前**加载
+
+        ```JAVA
+        @Configuration
+        @AutoConfigureBefore({TransactionManagerAutoConfiguration.class}) // 我必须在事务管理器配置前运行
+        public class JtaAutoConfiguration { ... }
+        ```
+
+
+
+
+
+###### **第四步：发布事件并返回最终列表**
+
+- **发布 `AutoConfigurationImportEvent` 事件**
+
+  在返回最终列表之前，`AutoConfigurationImportSelector` 会做一件很有意义的事：发布一个 `AutoConfigurationImportEvent` 事件
+
+  - **什么是事件发布?** 
+
+    - 这是 Spring 框架核心的观察者模式实现
+
+      一个组件（发布者）可以发布一个事件，其他任何对这个事件感兴趣的组件（监听器）都可以接收并处理这个事件，而发布者和监听者之间没有直接的代码耦合
+
+  - **`AutoConfigurationImportEvent` 包含了什么?** 
+
+    - 这个事件对象里封装了本次自动配置筛选过程的所有关键信息：
+      - **导入的配置列表 (`List<String> getCandidateConfigurations()`)**
+        - 最终被 `AutoConfigurationImportSelector` 确定要导入的、经过排序的自动配置类清单
+      - **排除的配置集合 (`Set<String> getExclusions()`)**
+        - 在第二步中，被开发者明确排除掉的自动配置类集合
+
+  - **为什么要发布这个事件？——为可观测性服务** 
+
+    - 这个事件的主要目的是为了**监控和调试**。它为我们打开了一个观察自动配置过程的窗口
+
+      - **Spring Boot Actuator**: 
+
+        - Actuator 端点 `/conditions` 的数据来源之一就是这个事件
+
+          当你访问这个端点查看自动配置报告时，看到的“匹配的”（positiveMatches）和“不匹配的”（negativeMatches / exclusions）部分信息，就是通过监听这个事件及后续的条件评估结果来收集和展示的
+
+      - **诊断工具**
+
+        - 开发人员可以编写自己的 `ApplicationListener` 来监听这个事件，从而在应用启动时打印出详细的自动配置导入日志，这在排查复杂的自动配置问题时非常有用
+
+
+
+- **返回最终列表：交付工作成果**
+
+  发布完事件后，`AutoConfigurationImportSelector` 就来到了它最核心的终点——执行 `selectImports` 方法的 `return` 语句
+
+  - **返回类型**: 
+    - `selectImports` 方法的签名要求返回一个 `String[]` (字符串数组)。因此，它会将已经处理好的 `List<String>` 转换为一个字符串数组
+  - **交付给谁?**
+    - 这个数组会被返回给 Spring 容器的**配置类解析器 (`ConfigurationClassParser`)**。这是工作流程的正式交接
+
+
+
+- **`AutoConfigurationImportSelector` 的使命完成**
+
+  一旦 `selectImports` 方法返回，`AutoConfigurationImportSelector` 的所有工作就全部结束了
+
+
+
+##### 涉及到的`@Conditional`注解
+
+###### 注解本身
+
+- 这个注解本身并不常用，然后它是一个父注解，派生出了大量的子注解
+
+- **作用**：
+  - 它告诉 Spring，只有在满足**某个特定条件**时，才应该加载被它标记的组件（比如一个 `@Configuration` 类或一个 `@Bean` 方法）
+
+- **使用**：
+
+  > 一个非常重要的限制是：**`@Conditional` 系列注解只有放在 Spring 进行 Bean 注册决策的地方才会生效**
+  >
+  > - **有效位置**：
+  >
+  >   1. **类级别** (如 `@Configuration`, `@Component` 等)
+  >   2. **`@Bean` 方法级别**
+  >
+  > - **无效位置**：
+  >
+  >   - 将 `@Conditional` 注解放到**任何非 `@Bean` 的普通方法或类上**是**无效的**
+  >
+  >     这样做**不会导致编译或运行时错误**，但 Spring 框架会**完全忽略**它，注解所期望的条件判断逻辑将不会执行
+  >
+  > - **原因**：
+  >
+  >   - Spring 的条件评估发生在容器启动时**扫描和注册 Bean 的阶段**
+  >
+  >     它只关心一个类是否应该被注册，或者一个 `@Bean` 方法是否应该被执行以创建 Bean。对于一个已经注册的 Bean 内部的普通方法，Spring 不会再去评估其上的条件注解
+  >
+  > 因此，为了避免逻辑混乱和潜在的错误，请始终只在**类**和 **`@Bean` 方法**上使用这些注解
+
+  - **放在类上**
+
+    - 当注解用在 `@Configuration` 类上时，如果条件不满足，该配置类下的**所有** `@Bean` 方法、`@Import` 指令等都将不会被处理
+    - 当注解用在普通组件类(如 `@Component`, `@Service`)上时，如果条件不满足，这个组件**不会被扫描和注册**到 Spring 容器中
+
+    ```JAVA
+    // 示例：放在 @Configuration 类上
+    @Configuration
+    @ConditionalOnProperty(name = "module.enabled", havingValue = "true")
+    public class MyModuleConfig {
+    
+        @Bean // 如果 module.enabled 不为 true，这个 Bean 不会被创建
+        public MyService myService() { /* ... */ }
+    
+        @Bean // 这个 Bean 也不会被创建
+        public AnotherService anotherService() { /* ... */ }
+    }
+    ```
+
+  
+
+  - **放在方法上**
+
+    - 当注解用在 `@Bean` 方法上时，只会影响**这一个 Bean**的创建
+
+      如果条件不满足，只有这个方法定义的 Bean 不会被注册，而同一个配置类中的其他 Bean 不受影响
+
+    ```JAVA
+    // 示例：放在 @Bean 方法上
+    @Configuration
+    public class MyServicesConfig {
+    
+        @Bean
+        @ConditionalOnProperty(name = "feature.a.enabled", havingValue = "true")
+        public FeatureAService featureAService() {
+            // 只有当 feature.a.enabled=true 时，这个 Bean 才会被创建
+            return new FeatureAService();
+        }
+    
+        @Bean // 这个 Bean 的创建不受上面条件的影响
+        public CommonService commonService() {
+            return new CommonService();
+        }
+    }
+    ```
+
+
+
+###### `@Conditional`家族
+
+- 下面是这个家族中最重要、最常用的成员：
+
+  | 注解                               | 功能描述                                                     | 经典用例                                                     |
+  | ---------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+  | **`@ConditionalOnClass`**          | **类路径条件**：<br />检查当前应用的 Classpath（类路径）下是否存在指定的类。这是最基础、最常用的条件 | 只有当 `javax.sql.DataSource` 这个类存在时（意味着引入了 JDBC 相关依赖），`DataSourceAutoConfiguration` 才可能生效 |
+  | **`@ConditionalOnMissingClass`**   | **类路径条件**：<br />与上面相反，检查 Classpath 下**不**存在指定的类时，条件才成立 |                                                              |
+  | **`@ConditionalOnBean`**           | **Bean 存在条件**：<br />检查 Spring IoC 容器中是否已经存在指定类型的 Bean | `JdbcTemplateAutoConfiguration` 需要在容器中已存在一个 `DataSource` 类型的 Bean 之后，才能为自己进行配置 |
+  | **`@ConditionalOnMissingBean`**    | **Bean 缺失条件**：<br />与上面相反，检查容器中**不**存在指定类型的 Bean 时，条件才成立<br />**这是实现“用户配置优先”的关键** | 如果用户**没有**自己定义一个 `DataSource` 类型的 Bean，`DataSourceAutoConfiguration` 才会提供一个默认的 Hikari 数据源 |
+  | **`@ConditionalOnProperty`**       | **属性条件**：<br />检查 `application.properties/yml` 配置文件中是否存在某个属性，或者属性的值是否等于期望值。这使得我们可以通过配置来开关功能 | `@ConditionalOnProperty(prefix = "spring.jpa", name = "open-in-view", havingValue = "true")` |
+  | **`@ConditionalOnWebApplication`** | **Web 应用条件**：<br />判断当前应用是否是一个 Web 应用（例如，是否存在 Spring MVC 的 `DispatcherServlet`） | `WebMvcAutoConfiguration` (Web MVC 的自动配置) 只应该在 Web 应用环境下生效 |
+  | **`@ConditionalOnResource`**       | **资源条件**：<br />检查 Classpath 下是否存在指定的资源文件  | 当 classpath 下存在 `templates/index.html` 文件时，激活某个视图解析器配置 |
+  | **`@ConditionalOnExpression`**     | **SpEL 表达式条件**：<br />提供最大的灵活性，允许基于 Spring Expression Language (SpEL) 的计算结果来判断条件是否成立 | `@ConditionalOnExpression("${spring.security.enabled:true} and ${spring.user.roles.contains('ADMIN')}")` |
+
+
+
+## `starter`
+
+### 关于`starter`
+
+#### 核心理念
+
+- 核心理念还是**约定优于配置**
+
+
+
+#### 本质
+
+- **`starter`本质上是一个特殊的依赖**，当你将一个 Starter 添加到你的项目中时：
+  - **会传递性地引入所有必需的库，帮你解决了版本兼容和依赖管理的烦恼**
+  - **会根据默认的最佳实践来配置这些库，无需关心繁琐的配置细节**
+
+
+
+- 这里有一个需要辨析的地方：
+
+  - 并不是说只有`starter`依赖，才能被 SpringBoot 自动配置，普通依赖也未尝不可哈
+
+    > 莫名其妙的很容易就联想了上去，服了
+
+
+
+#### 命名规范
+
+> 注意：**spring-boot-starter** 这个字符串，始终是连在一起的，老是容易想偏，觉得某个字符串会插入中间，这肯定不行
+
+- **官方**的 starter 遵循 **`spring-boot-starter-{模块名}`** 的格式，例如 **`spring-boot-starter-web`**
+
+  > 也就是说 **spring-boot-starter** 这个字符串 **在前面**
+
+- **自定义**的 starter ，**官方建议**的命名规范是 **`{模块名}-spring-boot-starter`**，例如 **`mybatis-spring-boot-starter`**
+
+  > 也就是说 **spring-boot-starter** 这个字符串 **在后面**
+
+
+
+### 自定义`starter`
+
+- 后面会补的
