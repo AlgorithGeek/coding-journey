@@ -42,25 +42,38 @@
 
 
 
+# BOM
+
+> Bill of Materials
+
+- **BOM**在 Maven 里指一类**只管“版本对齐”的 POM**
+- 作用：给一组相关依赖**统一规定版本**，避免你在每个依赖上都手写 `<version>`
+
+- **引入BOM的方式**：通过 **写入`<dependencyManagement>`** 中的 **`<dependencies>`** 中来引入
+
+
+
 # POM文件
 
 ## 基本概念
 
-- **POM (Project Object Model)** 是 Maven 项目的核心。
-  - 它是一个名为 `pom.xml` 的文件，位于项目的根目录。
-  - Maven 通过读取这个文件来获取项目的所有配置信息，并根据这些信息执行构建任务。
+- **POM (Project Object Model)** 是 Maven 项目的核心
+  - 它是一个名为 `pom.xml` 的文件，位于项目的根目录
+  - Maven 通过读取这个文件来获取项目的所有配置信息，并根据这些信息执行构建任务
 
 
 
 ## Super POM
 
-- 每一个 `pom.xml` 文件都隐式地继承自一个 **"Super POM"**。
-- 这个 Super POM 包含了所有 Maven 项目的默认配置，比如默认的源码目录、默认的中央仓库地址等。
+- 每一个 `pom.xml` 文件都隐式地继承自一个 **"Super POM"**
+
+- 这个 Super POM 包含了所有 Maven 项目的默认配置，比如默认的源码目录、默认的中央仓库地址等
+
   这就是为什么一个最简单的 `pom.xml` 只需要很少的几行配置就能工作的原因
 
 
 
-## POM文件的结构
+## POM文件结构与标签
 
 - 这个结构肯定不可能全部展示出来，大概展示还是有的
 
@@ -84,7 +97,7 @@
   - **`<modelVersion>`**: 指定了当前 POM 模型的版本。对于 Maven 2 和 3，这个值**永远是 `4.0.0`**。它声明了此 `pom.xml` 文件所遵循的语法规范
   - **`<packaging>`**: **打包方式**。它定义了项目的构建产物类型，默认为 `jar`。常见的值还包括：
     - `war`: 用于 Web 应用
-    - `pom`: 用于**父项目**或 BOM (Bill of Materials)，**它本身不包含代码，只用于管理依赖和配置**
+    - `pom`: 用于 **父项目** 或 BOM，**它本身不包含代码，只用于管理依赖和配置**
     - `ear`: 用于企业级应用
     - 详细知识点见后面打包方式的章节
 
@@ -265,7 +278,9 @@
 
 ### 子项目`<modules>` 与 `<module>`
 
-- 在 Maven 的世界里，`<modules>` 标签是实现 **多模块项目聚合** 的核心。如果你想通过一条命令就构建整个项目（包含多个子项目），那么你必须理解并使用这个标签
+- 在 Maven 的世界里，`<modules>` 标签是实现 **多模块项目聚合** 的核心
+
+  如果你想通过一条命令就构建整个项目（包含多个子项目），那么你必须理解并使用这个标签
 
 - 这个标签通常与 `<packaging>pom</packaging>` 和 `<parent>` 标签结合使用，共同构成了 Maven 多模块项目的基石
 
@@ -787,25 +802,43 @@ mvn clean install
 
 - **`<type>` (依赖类型)**
 
-  - **作用**: 指定依赖的类型，默认为 `jar`。其他常见的值包括 `pom` (用于导入 BOM)、`war`、`ejb`、`test-jar` (引入另一个项目的测试代码) 等
-  - **例子**: `<type>pom</type>` 与 `<scope>import</scope>` 结合使用
+  - **作用**: 
 
-  
+    - 指定依赖的类型，默认为 `jar`
+
+      其他常见的值包括 `pom` (用于导入 BOM)、`war`、`ejb`、`test-jar` (引入另一个项目的测试代码) 等
+
+  - **例子**: 
+
+    - `<type>pom</type>` 与 `<scope>import</scope>` 结合使用
+
+
+
 
 - **`<classifier>` (分类符)**
 
-  - **作用**: 进一步区分从同一个 POM 构建出的不同构件。一个项目可以生成多个构件，例如主 JAR、包含源码的 `sources.jar` 和包含 Javadoc 的 `javadoc.jar`。`classifier` 就是用来指定你要的是哪一个。
+  - **作用**: 
 
-  - **例子**: 如果你想在项目中引入某个库的源码，可以这样声明：
+    - 进一步区分从同一个 POM 构建出的不同构件
 
-    ```xml
-    <dependency>
-      <groupId>org.springframework</groupId>
-      <artifactId>spring-core</artifactId>
-      <version>5.3.18</version>
-      <classifier>sources</classifier>
-    </dependency>
-    ```
+      一个项目可以生成多个构件，例如主 JAR、包含源码的 `sources.jar` 和包含 Javadoc 的 `javadoc.jar``
+
+      ``classifier` 就是用来指定你要的是哪一个
+
+  - **例子**: 
+
+    - 如果你想在项目中引入某个库的源码，可以这样声明：
+
+      ```xml
+      <dependency>
+        <groupId>org.springframework</groupId>
+        <artifactId>spring-core</artifactId>
+        <version>5.3.18</version>
+        <classifier>sources</classifier>
+      </dependency>
+      ```
+
+      
 
     
 
@@ -814,14 +847,17 @@ mvn clean install
 - 用于**统一管理和约束**整个项目中（尤其是多模块项目中）的依赖版本和范围
 
 
+
 #### 此标签下的依赖标签
 
 ##### 基本特性
 
 - `<dependencyManagement>`内部也**只有一个`<dependences>`子标签**，但是它和另一个`<dependences>`有很大区别
-  - **声明而非引入**: 在 `<dependencyManagement>` 中定义的 `<dependencies>`中的`<dependency>`，**并不会被实际引入**到项目中
-    它仅仅是声明：“如果任何模块需要用到这个依赖，那么**应该使用这个版本和这个 scope**”
-  - **集中管理**: 它提供了一个中心化的位置，来定义所有依赖项的版本号、范围、排除项等信息
+  - **声明而非引入**: 
+    - 在 `<dependencyManagement>` 中定义的 `<dependencies>`中的`<dependency>`，**并不会被实际引入**到项目中
+      它仅仅是声明：“如果任何模块需要用到这个依赖，那么**应该使用这个版本和这个 scope**”
+  - **集中管理**: 
+    - 它提供了一个中心化的位置，来定义所有依赖项的版本号、范围、排除项等信息
 
 ##### 版本号
 
@@ -837,8 +873,18 @@ mvn clean install
 - `<dependencies>`中的`<dependency>`中的子标签这里也都有
   - 特殊的是这里的`<scope>`标签多了一个 `import` 属性
     - **`import` (导入范围)**
-      - **描述**: 这是一个特殊的范围，**只能在 `<dependencyManagement>` 部分中使用**。它允许你从另一个 POM 文件中导入所有的 `<dependencyManagement>` 配置。这通常用于导入所谓的 **BOM (Bill of Materials)**，即一个专门用于定义一组相关库版本清单的 POM。
-      - **例子**: Spring Boot 和 Spring Cloud 就通过 BOM 来管理庞大的依赖体系
+      
+      - **描述**: 
+      
+        - 这是一个特殊的范围，**只能在 `<dependencyManagement>` 部分中使用**
+      
+          它**允许你从另一个 POM 文件中导入所有的 `<dependencyManagement>` 配置**
+      
+          > 要是不写这个，它只会“管理了这个 POM 自己”这一个坐标的版本，对它里面的 `<dependencyManagement>` **不会生效**（等于没导入 BOM 内容）
+      
+          这通常用于导入所谓的 **BOM**，即**一个专门用于定义一组相关库版本清单的 POM**
+      
+      - **例子**: Spring Cloud 和 Spring Cloud Alibaba
 
 
 
@@ -1523,11 +1569,11 @@ mvn clean install
 
 
 
-## 父项目的打包方式
+## 父项目和BOM的打包方式
 
 ### 核心结论
 
-- 如果一个Maven工程的主要职责是作为其他模块（子工程）的 **父工程（Parent Project）**，用来管理公共配置和聚合模块，
+- 如果一个Maven工程的主要职责是作为其他模块 (子工程) 的 **父工程**，用来管理公共配置和聚合模块，
 
   那么它的打包方式 **必须** 设置为 `pom`
 
@@ -1535,18 +1581,35 @@ mvn clean install
   <packaging>pom</packaging>
   ```
 
-  
+  - **BOM** 本质上就是一个 **`packaging=pom`** 的 **POM**
+
+
 
 ### 为什么必须是 `pom`？
 
-- Maven工程有多种打包方式，例如 `jar`（默认）、`war`、`ear` 等。这些打包方式都意味着该工程在构建后会产出一个对应的文件（如 `.jar` 文件或 `.war` 文件）
+- Maven工程有多种打包方式，例如 `jar`（默认）、`war`、`ear` 等
+
+  这些打包方式都意味着该工程在构建后会产出一个对应的文件（如 `.jar` 文件或 `.war` 文件）
 
 - 然而，父工程的职责并不是产出可执行或可部署的代码包。它的主要作用是：
-  1. **统一管理依赖版本**：在父工程的 `<dependencyManagement>` 标签中声明所有子模块会用到的依赖及其版本号。这样可以确保所有子模块使用统一的依赖版本，避免版本冲突。
-  2. **统一管理插件配置：在 `<pluginManagement>` 中统一配置插件，子模块可以继承这些配置。
-  3. **聚合子模块**：通过 `<modules>` 标签，将多个子模块聚合在一起。这样，你只需要在父工程上执行一条Maven命令（如 `mvn clean install`），就可以一次性构建所有的子模块。
-  4. **共享属性**：在父工程中定义的属性（例如 `<properties><spring.version>5.3.0</spring.version></properties>`）可以被所有子模块继承和使用
-
+  1. **统一管理依赖版本**：
+  
+     - 在父工程的 `<dependencyManagement>` 标签中声明所有子模块会用到的依赖及其版本号
+  
+       这样可以确保所有子模块使用统一的依赖版本，避免版本冲突
+  
+  2. **统一管理插件配置**：
+  
+     - 在 `<pluginManagement>` 中统一配置插件，子模块可以继承这些配置
+  
+  3. **聚合子模块**：
+  
+     - 通过 `<modules>` 标签，将多个子模块聚合在一起。这样，你只需要在父工程上执行一条Maven命令（如 `mvn clean install`），就可以一次性构建所有的子模块
+  
+  4. **共享属性**：
+  
+     - 在父工程中定义的属性（例如 `<properties><spring.version>5.3.0</spring.version></properties>`）可以被所有子模块继承和使用
+  
 - 因为父工程本身通常不包含任何Java源代码（即没有 `src/main/java` 目录）或资源文件，它只是一个配置文件集合
   如果将其打包方式设置为 `jar`（默认值），Maven会尝试去编译代码并生成一个 JAR 包，这不仅没有意义，而且在没有源代码的情况下可能会导致构建失败或产生一个空的JAR包
 
@@ -1562,18 +1625,46 @@ mvn clean install
 
 - 这个规则的制定者就是 **Maven 工具本身**。Maven 的核心构建逻辑会根据 `<packaging>` 的值来决定执行哪些操作：
 
-  - **当 `<packaging>` 是 `pom` 时**：Maven 知道这个项目的角色是一个聚合器和父模块。它的核心任务之一就是去解析 `<modules>` 标签，并依次构建其中列出的所有子模块
+  - **当 `<packaging>` 是 `pom` 时**：
 
-  - **当 `<packaging>` 是 `jar`, `war` 或其他类型时**：Maven 会认为这是一个标准的、需要产出代码包的模块。它会执行编译、测试、打包等一系列操作，并且**会完全忽略 `<modules>` 标签**
+    - Maven 知道这个项目的角色是一个聚合器和父模块
+
+      它的核心任务之一就是去解析 `<modules>` 标签，并依次构建其中列出的所有子模块
+
+  - **当 `<packaging>` 是 `jar`, `war` 或其他类型时**：
+
+    - Maven 会认为这是一个标准的、需要产出代码包的模块
+
+      它会执行编译、测试、打包等一系列操作，并且**会完全忽略 `<modules>` 标签**
 
 - 因此，为了使用 Maven 的多模块聚合功能，你必须遵守这个由其软件架构所决定的规则
 
 #### 如果不设置为 `pom` 会发生什么？(常见误区)
 
 - 一个常见的误解是，如果不设置为 `pom`，Maven 会直接报错。实际上，情况可能更糟：**构建过程可能不会报错，但会产生完全错误的结果**
-  1. **最关键的后果：聚合功能完全失效** Maven 将会无视 `<modules>` 标签。这意味着，当你在父工程上执行 `mvn clean install` 时，**所有的子模块都不会被构建**。父工程最重要的功能就失效了
-  2. **父工程被错误地打包** Maven 会尝试将父工程本身打包成一个 `jar` 包（或其他非 `pom` 的类型）。由于父工程通常没有源代码，`maven-jar-plugin` 最终只会生成一个**空的、毫无用处的 `.jar` 文件**，并可能伴随一条警告信息
-  3. **产生误导性的 `BUILD SUCCESS`** 整个构建过程可能最终会显示 `BUILD SUCCESS`，这会让你误以为所有模块都已成功构建。但实际上，你只得到了一个空的 `jar` 包，而所有子模块都被忽略了。这比直接看到构建失败（`BUILD FAILURE`）要危险得多
+  1. **最关键的后果：聚合功能完全失效**
+  
+     -  Maven 将会无视 `<modules>` 标签
+  
+       这意味着，当你在父工程上执行 `mvn clean install` 时，**所有的子模块都不会被构建**
+  
+       父工程最重要的功能就失效了
+  
+  2. **父工程被错误地打包** 
+  
+     - Maven 会尝试将父工程本身打包成一个 `jar` 包（或其他非 `pom` 的类型）
+  
+       由于父工程通常没有源代码，`maven-jar-plugin` 最终只会生成一个**空的、毫无用处的 `.jar` 文件**，并可能伴随一条警告信息
+  
+  3. **产生误导性的 `BUILD SUCCESS`**
+  
+     -  整个构建过程可能最终会显示 `BUILD SUCCESS`，这会让你误以为所有模块都已成功构建
+  
+       但实际上，你只得到了一个空的 `jar` 包，而所有子模块都被忽略了
+  
+       这比直接看到构建失败（`BUILD FAILURE`）要危险得多
+
+
 
 ### 示例
 
@@ -1664,14 +1755,12 @@ mvn clean install
   </project>
   ```
 
-  
 
 
 
 # Maven生命周期
 
-- Maven 的核心思想之一是它为所有项目构建定义了一套标准化的流程，
-  这遵循了其著名的“约定优于配置”（Convention over Configuration）原则
+- Maven 的核心思想之一是它为所有项目构建定义了一套标准化的流程，这遵循了其著名的“约定优于配置”原则
   - 这个标准化的流程就是**生命周期（Lifecycle）**
 
 ## 生命周期相关概念
@@ -1811,3 +1900,26 @@ mvn clean install
 
   ![image-20250810000227622](./assets/image-20250810000227622.png)
 
+
+
+# 依赖的分类
+
+- 我对依赖进行了下面的这些分类
+  - **普通依赖**
+    - 纯代码库，拿来就用，不依赖外部进程
+    - 例如一些工具类
+  - **客户端型依赖**
+    - 只提供“客户端”，必须连接**外部服务端**才能发挥作用
+    - 例如：
+      - nacos的依赖
+  - **内嵌服务端型依赖**
+    - 依赖内实现了“服务器”，随你的应用进程启动并监听端口；无需单独安装外部服务
+    - 例如
+      - Web容器：`spring-boot-starter-web`（内嵌 **Tomcat** ...)
+  - **BOM**
+    - 严格来说我不知道这个算不算一个依赖，我自己首先就不太认同它是一个依赖，但我还是写到了这里
+    - 它的定义见前文“BOM”笔记
+    - 例如
+      - `spring-cloud-dependencies`、`spring-cloud-alibaba-dependencies`
+  - **组合依赖**
+    - ......
