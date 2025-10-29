@@ -1468,13 +1468,21 @@ wrapper.nested(w -> w.gt(User::getAge, 25).like(User::getName, "张"))
 
 # `BaseMapper`接口
 
-> 其实学到后面，这个几乎用不到了。
+> 其实到后面，这个几乎我个人而言几乎用不到了。
 >
 > 基本上就是当一个东西到达mapper层的时候，基本上就要手搓原生SQL了，我不喜欢Wrapper结合原生SQL一起用
+>
+> 这里我说的用不到，是指我不会用这个去搓一个sql，但是肯定 Mapper 还是要引入的，毕竟底层都是它
 
 - `BaseMapper` 是 MyBatis-Plus 框架的基石
 - 一个内置的、高度通用的数据访问接口（Mapper接口），预定义了大量针对单表的、开箱即用的 CRUD（增删改查）方法
 - 开发者只需要让自己的 Mapper 接口继承 `BaseMapper`，就能立即拥有这些强大的功能，从而**无需编写任何基础的 SQL 语句**，极大地提升了开发效率
+
+  > 上面所说的这个就是自定义Mapper，
+  >
+  > 自定义 `Mapper`（例如 `XxxMapper extends BaseMapper<Xxx>`）**最核心的作用**就是把 `BaseMapper<T>` 的泛型 **T 具体化为你的实体类 `Xxx`**。这样 MyBatis-Plus 才能针对 你的数据库表实体类`Xxx` 生成通用 CRUD
+  >
+  > 这个`XxxMapper` 需要被 `@Mapper`/`@MapperScan` 注册成 Bean
 
 
 
@@ -1793,10 +1801,23 @@ wrapper.nested(w -> w.gt(User::getAge, 25).like(User::getName, "张"))
 
 - `IService<T>` 是 MyBatis-Plus 提供的一个**通用 Service 层接口**
 
-- `ServiceImpl<M, T>` 是 `IService` 的默认实现，已经帮你做好了所有通用方法
+- `ServiceImpl<M, T>` 是 `IService` 的官方默认实现类，已经帮你做好了所有通用方法
 
   - `M` 代表 Mapper 接口的类型 (`UserMapper`)
+
+    > 这是你**自定义并继承了 `BaseMapper<T>` 的 Mapper**，写这个可以知道底层调用的哪个Mapper中的方法
+    >
+    > > `ServiceImpl` 内部有一个名为 `baseMapper` 的成员变量 (`protected M baseMapper;`)
+    > >
+    > > 它会通过 Spring 自动注入你传入的 `M` 类型（也就是 `UserMapper`）的实例
+    > >
+    > > **`ServiceImpl` 中所有方法的底层，最终都是通过调用这个 `baseMapper` 实例的对应方法来完成数据库操作的**
+    > >
+    > >  例如，调用 `userService.save(user)`，其内部实际执行的是 `baseMapper.insert(user)`
+
   - `T` 代表实体类的类型 (`User`)
+
+    > 指定数据库表所对应的entity类
 
 - 在使用里面的批处理添加数据的时候，在配置文件中jdbc的url后面添加参数`&rewriteBatchedStatements=true`
 
@@ -2278,18 +2299,39 @@ lambdaUpdate().set(User::getBalance,remainBalance)
 
 # 静态工具类 `Db`⭐
 
+> 后来我变了，我变得几乎所有的操作都用这玩意搞，我嘞个豆
+
 - 这个是一个静态工具类，可以使用内部的静态方法来调用方法，实现对数据的增删改查
 
 - 所有方法都是静态的，可以直接通过 `Db.` 调用，无需注入
 
-- 方法和**`IService`**中的方法基本相同, 可以直接尝试调用, 不需要额外的学习成本, 只不过很多方法需要上传一个**`Class`对象**来指定**要操作的实体/表**
+- 方法和**`IService`**中的方法基本相同, 可以直接尝试调用, 不需要额外的学习成本, 只不过很多方法需要上传一个 **`Class`对象** 来指定**要操作的实体/表**
 
 - 这个非常大的一个好处是可以解决**`service`层的某些场景下的循环依赖**，对于我自己而言，
 
   我喜欢**本类单表使用`IService`，其他类多表使用`Db`**
 
-- `Db.save()` 存入哪张表，完全由您传入的那个 Java 对象的类定义来决定
+  > 骗你的，实际上后来不管本类还是其他类，我都用`Db.`
+
+- `Db.save()` 存入哪张表，完全由您传入的那个 Java 对象的类定义来决定，`entity`嘛
   **如果没有在数据库中找到对应的表**，那么程序会**抛出异常，整个操作会失败，数据不会被存入任何地方**
+  
+- ⭐这里有**非常重要**的一点，我曾经在这里吃过非常大的亏：
+
+  `Db`虽然是静态工具类，可以免注入，但是它不能 “免 Mapper”
+
+  但是**本质上底层还是去调用的 `BaseMapper` 中的方法实现的**，**`IService` 的默认实现也是调 `BaseMapper`**
+
+  无论用 `Db.*`、`IService` 还是别的什么，底层都是 `BaseMapper`
+
+  因此，无论如何，项目中**必须**为每一个需要操作的**实体类**创建一个**对应的 `Mapper` 接口**，**并被扫描为 Bean**
+
+  否则一切的 CRUD 将无法执行
+
+- 我喜欢优先调用现有的方法，没有方法的话我再进行链式构造 sql 语句
+
+- 好吧，我目前又开始犹豫到底要不要用`Db`了，因为好像缺点挺大的，有点道心破碎，感觉还是使用`IService`+`BaseMapper`比较好，因为`Db`有缺点
+
 
 
 

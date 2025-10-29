@@ -289,9 +289,13 @@
 
 > 名字来源：**Na**ming 和 **Co**nfiguration **S**ervice
 
+![image-20251015003845338](./assets/image-20251015003845338.png)
+
 #### 简介
 
 ##### 概述
+
+- 官网：https://nacos.io/
 
 - **Nacos** 是阿里巴巴开源的一个 **动态服务发现、配置管理和服务管理平台**
 - 在 **Spring Cloud Alibaba** 生态中，Nacos 是默认的 **注册中心** 和 **配置中心**
@@ -611,7 +615,7 @@
 
 
 
-##### 2. 安装 Nacos Server
+##### 2. 安装部署启动 Nacos Server
 
 ###### 概述
 
@@ -621,13 +625,280 @@
 
 
 
-###### Docker 安装
+###### 两种模式：单机与集群
+
+- **单机模式**
+
+  > 适合：个人学习、功能开发、本地测试
+
+  - 这是 Nacos 的基础运行模式，所有数据都存在单个 Nacos 实例中
+
+    它**默认使用内置嵌入式数据库（Apache Derby）**，开箱即用、启动最快
+
+    > 这个是默认行为，不过它也**支持改成外部 MySQL**（改 `application.properties`），便于后续平滑迁移到集群
 
 
 
-###### Windows 安装
+- **集群模式**
+
+  > 生产环境、准生产环境、任何对可用性有要求的场景
+
+  - 在生产环境中，为了保证高可用，通常会部署至少3个 Nacos 节点组成一个集群
+
+    这些节点之间会同步数据，通常接入一个**外部、共享的数据库（常用 MySQL）**做统一持久化存储，这是官方生产指引
+
+    > Nacos 2.x 也支持 **集群内置存储（embedded storage）**，无需 MySQL，但需要显式配置，**不作为主流生产做法**
 
 
+
+###### Windows 版
+
+- **前提**：
+  
+  - 确保已经安装好了 Java 8 或 以上的 JDK，并配置好了 `JAVA_HOME` 环境变量
+  - 下载一个 Nacos Server，大多数团队现在用 Nacos 2.x，稳妥一点选 `2.2.3` 比较好
+- **单机模式**
+
+  1. 打开 `cmd` 之后进入 `nacos\bin`
+  2. 执行命令
+
+     ```cmd
+     # -m standalone 参数明确告诉 Nacos 以单机模式启动
+     startup.cmd -m standalone
+     ```
+  3. 执行命令后会展示弹窗
+
+  4. 启动日志滚动完成后，浏览器中进入上一步弹窗中显式的网址，进入nacos控制台
+
+     - **默认用户名**：`nacos`
+     - **默认密码**：`nacos`
+
+  5. **如何关闭服务**：在同一个 `cmd` 窗口中按 `Ctrl+C`，或者新开一个 `cmd` 窗口进入 `nacos\bin` 目录，执行 `shutdown.cmd`
+
+
+
+
+- **集群模式**
+
+  > 前提：**需要一个可用的 MySQL 数据库 (5.7+ 版本)**
+
+  - **数据库初始化**
+    1. 在 MySQL 中创建一个专门给 Nacos 使用的数据库，例如 `nacos_config`
+    2. 找到 Nacos 解压目录下的 `conf/nacos-mysql.sql` 文件
+    3. 将这个 SQL 脚本在 `nacos_config` 数据库中执行，这会创建 Nacos 所需的全部数据表
+
+  - **修改 Nacos 配置文件**
+    1. 打开 `nacos\conf` 目录下的 `application.properties` 文件
+    2. 在文件末尾找到关于数据源的配置，**去掉注释**并修改为你的 MySQL 连接信息
+
+
+
+
+
+###### Docker 版
+
+- 前提：Docker 已安装
+
+- **单机模式**
+
+  - 输入下面的命令。这条命令会**基于镜像创建并启动一个容器**；如果本机**还没有**这个镜像，Docker 会**先自动拉取**它
+
+    ```
+    
+    ```
+
+- **集群模式**
+
+
+
+### Test
+
+#### 1.4. 部署集群模式 (Cluster) - 生产级
+
+在单台 Windows 机器上模拟集群部署稍微复杂，但能帮助你理解其原理。我们将模拟一个三节点的集群。
+
+**前提：你需要一个可用的 MySQL 数据库 (5.7+ 版本)。**
+
+1. **数据库初始化**：
+
+   - 在你的 MySQL 中创建一个专门给 Nacos 使用的数据库，例如 `nacos_config`。
+   - 找到 Nacos 解压目录下的 `conf/nacos-mysql.sql` 文件。
+   - 使用数据库管理工具（如 Navicat, DataGrip）或命令行，将这个 SQL 脚本在 `nacos_config` 数据库中执行。这会创建 Nacos 所需的全部数据表。
+
+2. **修改 Nacos 配置文件**：
+
+   - 打开 `nacos\conf` 目录下的 `application.properties` 文件。
+
+   - 在文件末尾找到关于数据源的配置，**去掉注释**并修改为你的 MySQL 连接信息：
+
+     ```
+     #*************** Config Module Related Configurations ***************#
+     ### If use MySQL as datasource:
+     spring.datasource.platform=mysql
+     
+     ### Count of DB:
+     db.num=1
+     
+     ### Connect URL of DB:
+     db.url.0=jdbc:mysql://127.0.0.1:3306/nacos_config?characterEncoding=utf8&connectTimeout=1000&socketTimeout=3000&autoReconnect=true
+     db.user.0=your_mysql_username
+     db.password.0=your_mysql_password
+     ```
+
+3. **配置集群节点列表**：
+
+   - 在 `nacos\conf` 目录下，复制 `cluster.conf.example` 并重命名为 `cluster.conf`。
+
+   - 编辑 `cluster.conf` 文件，填入所有 Nacos 节点的 IP 和端口。由于我们在单机上模拟，可以使用不同端口：
+
+     ```
+     127.0.0.1:8848
+     127.0.0.1:8849
+     127.0.0.1:8850
+     ```
+
+4. **启动集群节点**：
+
+   - 要在一台机器上启动多个不同端口的 Nacos 实例，最简单的方法是**复制三份 `nacos` 目录**，例如 `nacos-8848`, `nacos-8849`, `nacos-8850`。
+
+   - **分别修改**每个目录下的 `conf/application.properties` 文件中的 `server.port` 属性，改为对应的端口（8848, 8849, 8850）。
+
+   - **分别打开三个 `cmd` 窗口**，进入各自的 `bin` 目录，执行启动命令（**注意：集群模式不再需要 `-m standalone` 参数**）：
+
+     ```cmd
+     # 在 nacos-8848\bin 目录下执行
+     startup.cmd
+     
+     # 在 nacos-8849\bin 目录下执行
+     startup.cmd
+     
+     # 在 nacos-8850\bin 目录下执行
+     startup.cmd
+     ```
+
+5. **验证**：分别访问 `http://127.0.0.1:8848/nacos`, `http://127.0.0.1:8849/nacos`, `http://127.0.0.1:8850/nacos`。登录后，在左侧菜单“集群管理” -> “节点列表”中，应该能看到所有3个节点，并且状态都是“UP”。
+
+#### 2. Docker 环境安装与部署
+
+**前提：你的机器上已经安装了 Docker 和 Docker Compose。**
+
+##### 2.1. 部署单机模式 (Standalone)
+
+使用 Docker 部署单机 Nacos 极其简单。
+
+1. **拉取镜像**：
+
+   ```
+   docker pull nacos/nacos-server
+   ```
+
+2. **启动容器**：
+
+   ```
+   docker run --name nacos-standalone -d -p 8848:8848 \
+   -e PREFER_HOST_MODE=hostname \
+   -e MODE=standalone \
+   nacos/nacos-server
+   ```
+
+   - `--name`: 给容器起个名字。
+   - `-d`: 后台运行。
+   - `-p 8848:8848`: 将主机的 8848 端口映射到容器的 8848 端口。
+   - `-e MODE=standalone`: **关键！** 通过环境变量设置启动模式为单机。
+
+3. **验证**：同样是访问 `http://127.0.0.1:8848/nacos`，使用 `nacos/nacos` 登录。
+
+##### 2.2. 部署集群模式 (Cluster) - 使用 Docker Compose
+
+这是在 Docker 环境下部署集群的最佳实践，它能轻松地编排 MySQL 和多个 Nacos 节点。
+
+1. **创建 `docker-compose.yml` 文件**： 在你喜欢的工作目录下，创建一个名为 `docker-compose.yml` 的文件，并填入以下内容。**请根据注释修改 MySQL 的密码**。
+
+   ```
+   version: "3.8"
+   services:
+     mysql:
+       image: mysql:5.7
+       container_name: nacos-mysql
+       environment:
+         - MYSQL_ROOT_PASSWORD=your_password # !! 修改为你自己的密码
+         - MYSQL_DATABASE=nacos_config
+       volumes:
+         - ./mysql-data:/var/lib/mysql
+       ports:
+         - "33066:3306" # 将主机的33066端口映射到容器的3306
+   
+     nacos1:
+       image: nacos/nacos-server
+       container_name: nacos1
+       depends_on:
+         - mysql
+       ports:
+         - "8848:8848"
+         - "9848:9848" # 集群间通信端口
+       environment:
+         - PREFER_HOST_MODE=hostname
+         - MODE=cluster
+         - SPRING_DATASOURCE_PLATFORM=mysql
+         - MYSQL_SERVICE_HOST=mysql
+         - MYSQL_SERVICE_PORT=3306
+         - MYSQL_SERVICE_DB_NAME=nacos_config
+         - MYSQL_SERVICE_USER=root
+         - MYSQL_SERVICE_PASSWORD=your_password # !! 和上面MySQL的密码保持一致
+         - NACOS_SERVERS=nacos1:8848,nacos2:8848,nacos3:8848 # 集群节点列表
+   
+     nacos2:
+       image: nacos/nacos-server
+       container_name: nacos2
+       depends_on:
+         - mysql
+       ports:
+         - "8849:8848"
+         - "9849:9848"
+       environment:
+         - PREFER_HOST_MODE=hostname
+         - MODE=cluster
+         - SPRING_DATASOURCE_PLATFORM=mysql
+         - MYSQL_SERVICE_HOST=mysql
+         - MYSQL_SERVICE_PORT=3306
+         - MYSQL_SERVICE_DB_NAME=nacos_config
+         - MYSQL_SERVICE_USER=root
+         - MYSQL_SERVICE_PASSWORD=your_password # !! 和上面MySQL的密码保持一致
+         - NACOS_SERVERS=nacos1:8848,nacos2:8848,nacos3:8848
+   
+     nacos3:
+       image: nacos/nacos-server
+       container_name: nacos3
+       depends_on:
+         - mysql
+       ports:
+         - "8850:8848"
+         - "9850:9848"
+       environment:
+         - PREFER_HOST_MODE=hostname
+         - MODE=cluster
+         - SPRING_DATASOURCE_PLATFORM=mysql
+         - MYSQL_SERVICE_HOST=mysql
+         - MYSQL_SERVICE_PORT=3306
+         - MYSQL_SERVICE_DB_NAME=nacos_config
+         - MYSQL_SERVICE_USER=root
+         - MYSQL_SERVICE_PASSWORD=your_password # !! 和上面MySQL的密码保持一致
+         - NACOS_SERVERS=nacos1:8848,nacos2:8848,nacos3:8848
+   ```
+
+2. **执行数据库初始化脚本**： 由于 Docker 容器内的 Nacos 首次启动时不会自动创建表，我们需要手动执行。
+
+   - 先只启动 MySQL：`docker-compose up -d mysql`
+   - 下载 `nacos-mysql.sql` 脚本（可以从解压的 Nacos 包 `conf` 目录中找到）。
+   - 使用数据库工具连接到 `localhost:33066`，用户 `root`，密码为你设置的密码，然后在 `nacos_config` 库中执行脚本。
+
+3. **启动整个集群**： 在 `docker-compose.yml` 文件所在的目录下，执行：
+
+   ```
+   docker-compose up -d
+   ```
+
+4. **验证**：等待所有容器启动完成后，分别访问 `http://localhost:8848/nacos`, `http://localhost:8849/nacos`, `http://localhost:8850/nacos`。登录后查看集群节点列表，确认所有节点都已正常启动。
 
 
 

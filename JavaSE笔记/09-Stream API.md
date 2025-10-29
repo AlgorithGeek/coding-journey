@@ -3,6 +3,8 @@
 - 和**I/O流**都是**流**，但它的**侧重点在于计算，是为了从数据中提取新的信息或价值，是逻辑层面的**
   - **I/O流**的**侧重点在于I/O(输入输出)，它侧重于数据的存储、传输及一些相关操作，它是技术层面的**
 
+
+
 ## 相关概念与理解
 
 - 数据处理的抽象管道（非IO流）
@@ -72,7 +74,7 @@
 
 - 每个接口也**在JDK内部会有对应的实现类**，可以用这个接口类型进行接收对应的对象
 
-## 获取对象的方式
+## 获取 Stream 的方式
 
 - 不同的情况下有不同的**获取Stream流的方式**
 - 我咋这里列举了一些常见的方式，当然也可能会有这些方式之外的方式
@@ -124,6 +126,8 @@
       static DoubleStream  of(double... values)			//返回包含参数中所有元素的DoubleStream
       ```
 
+
+
 ### 集合
 
 - **集合只支持单列集合(Collection系列集合)直接生成流**，**双列集合(Map系列集合)得通过键单列集合、值单列集合、键值对单列集合集合间接生成流**
@@ -152,9 +156,9 @@
 ### `Stream`中的一些方法
 
 ```java
-static<T> Stream<T>         of(T t)                             // 返回包含单个元素的顺序流
-@SafeVarargs static<T> Stream<T> of(T... values)                // 返回包含多个元素的顺序流
-static<T> Stream<T>         ofNullable(T t)                     // 若t非空则返回单元素流，否则返回空流
+static<T> Stream<T>         		of(T t)                             // 返回包含单个元素的顺序流
+@SafeVarargs static<T> Stream<T> 	of(T... values)                		// 返回包含多个元素的顺序流
+static<T> Stream<T>         		ofNullable(T t)                     // 若t非空则返回单元素流，否则返回空流
    
 static<T> Stream<T>         empty()                             // 返回空流
 static<T> Stream<T>         concat(Stream<? extends T> a, Stream<? extends T> b)//合并两个流,会找最近公共超类型
@@ -546,26 +550,26 @@ boolean 			isParallel()							//如果要执行终端操作，则返回此流是
 
 ## Collector接口
 
-- 是一个定义了**如何执行可变汇聚操作（Mutable Reduction）的规范（Specification）或配方（Recipe）** 的接口。它是 **`Stream`**中**`collect() `**方法的核心驱动力，告诉 collect 方法具体应该**如何**收集流中的元素
+- 是一个为了`Stream`中的`collect(Collector)`方法量身定做的接口
+
+- 是一个定义了**如何执行可变汇聚操作的规范或配方** 的接口。它是 **`Stream`**中**`collect() `**方法的核心驱动力，告诉 collect 方法具体应该**如何**收集流中的元素
 
   > 可以把它想象成一份详细的说明书，指导如何将一堆散乱的零件（流中的元素 T）组装成一个有用的成品（最终结果 R），可能还需要一个临时的组装台（中间累加器 A）
 
-- 它与 **`Stream`**中的**`collect(Collector)`** 方法紧密配合。
+- 它与 **`Stream`**中的**`collect(Collector)`** 方法紧密配合
 
 - **`java.util.stream.Collectors `**工具类提供了大量预先定义好的、实现了 **`Collector`**接口的实例
 
-  - 我看了一下，**`Collections`**工具类中所有的方法的返回值都是**`Collector`**
+  - 我看了一下，**`Collectors`**工具类中所有的方法的返回值都是**`Collector`**
 
 - 它的内部有着各种各样的**收集相关的信息**
 
-- 其实我感觉这个**也是为了`Stream`中的`collect(Collector)`方法量身定做的，懒得喷**
 
-  
 
 ## `Collectors`工具类
 
 - **所有的方法的返回值**都是**`Collector`**，极其兼容**`Stream`**中的**`collect`方法**
-  - 妈的逼我就直说了：**它就是为了配合 `Stream`中的`collect(Collector)` 方法而设计的**，别处我反正没见到有地方用
+  - **它就是为了配合 `Stream`中的`collect(Collector)` 方法而设计的**
 
 ### 一些方法
 
