@@ -894,11 +894,11 @@ public interface UserMapper {
 
   1. **当查询结果为单行或零行时：**
 
-     - **默认行为**：返回一个**单个对象**。
+     - **默认行为**：返回一个**单个对象**
 
-     - **类型**：这个对象的类型就是你在 `resultType` 中指定的类型（如 `User`, `Map<String, Object>`, `Integer` 等）。
+     - **类型**：这个对象的类型就是你在 `resultType` 中指定的类型（如 `User`, `Map<String, Object>`, `Integer` 等）
 
-     - **注意**：如果查询结果为零行，MyBatis 会返回 `null`。为了避免空指针异常，推荐使用 Java 8 的 `Optional<T>` 来包装返回类型。
+     - **注意**：如果查询结果为零行，MyBatis 会返回 `null`。为了避免空指针异常，推荐使用 Java 8 的 `Optional<T>` 来包装返回类型
 
        ```java
        // 推荐做法
@@ -909,9 +909,9 @@ public interface UserMapper {
 
   2. **当查询结果为多行时：**
 
-     - **默认行为**：返回一个 `java.util.List` 集合。
+     - **默认行为**：**返回一个 `java.util.List` 集合**⭐
 
-     - **集合内容**：这个 `List` 中包含的每一个元素，都是一个根据 `resultType` 封装好的 Java 对象。
+     - **集合内容**：这个 `List` 中包含的每一个元素，都是一个根据 `resultType` 封装好的 Java 对象
 
      - **示例**：
 
@@ -934,9 +934,9 @@ public interface UserMapper {
 
 - 如果你不想要默认的 `List`，**只需直接修改 Mapper 接口方法的返回类型签名**。MyBatis 会自动适应
 
-  - **改为 `Set`**：如果你需要一个不含重复元素的集合。
+  - **改为 `Set`**：如果你需要一个不含重复元素的集合
 
-    - **前提**：POJO 类（如 `User`）必须正确重写 `equals()` 和 `hashCode()` 方法。
+    - **前提**：POJO 类（如 `User`）必须正确重写 `equals()` 和 `hashCode()` 方法
 
     - **示例**：
 
@@ -946,7 +946,7 @@ public interface UserMapper {
 
   
 
-  - **改为数组 `[]`**：如果你需要一个数组。
+  - **改为数组 `[]`**：如果你需要一个数组
 
     - **示例**：
 
@@ -956,9 +956,9 @@ public interface UserMapper {
 
   
 
-  - **改为 `Map`**：如果你需要一个方便通过键查找的 `Map`。
+  - **改为 `Map`**：如果你需要一个方便通过键查找的 `Map`
 
-    - **前提**：必须配合 `@MapKey` 注解来指定用哪个属性作为键。
+    - **前提**：必须配合 `@MapKey` 注解来指定用哪个属性作为键
 
     - **示例**：
 
@@ -985,8 +985,8 @@ public interface UserMapper {
 
 # Mapper XML文件
 
-- MyBatis 的核心魅力在于它能将 SQL 从业务逻辑中解耦出来，而 Mapper XML 文件正是承载这些 SQL 的核心工作区。
-  - Mapper XML文件 精确定义了 **Mapper 接口中的方法如何与具体的 SQL 语句绑定、参数如何传递以及结果如何映射**。
+- MyBatis 的核心魅力在于它能将 SQL 从业务逻辑中解耦出来，而 Mapper XML 文件正是承载这些 SQL 的核心工作区
+  - Mapper XML文件 精确定义了 **Mapper 接口中的方法如何与具体的 SQL 语句绑定、参数如何传递以及结果如何映射**
 
 
 
@@ -1054,7 +1054,7 @@ public interface UserMapper {
 
   - **规则**: **必须与 Mapper 接口中对应的方法名完全一致**
 
-    - 这是 MyBatis 通过动态代理将接口方法调用精确绑定到具体 SQL 语句的基石。
+    - 这是 MyBatis 通过动态代理将接口方法调用精确绑定到具体 SQL 语句的基石
 
       
 
@@ -1077,22 +1077,23 @@ public interface UserMapper {
 
 - **`resultMap`**:
 
-  - **作用**: 引用一个预先定义好的 `<resultMap>` 标签的 `id`。它启动了 MyBatis 的**手动映射**机制。
+  - **作用**: 引用一个预先定义好的 `<resultMap>` 标签的 `id`。它启动了 MyBatis 的**手动映射**机制
 
   - **用法**: `resultMap="userBaseResultMap"`。适用于以下场景：
 
-    1. 数据库列名和 Java 属性名不一致，且无法通过驼峰命名自动转换。
+    1. 数据库列名和 Java 属性名不一致，且无法通过驼峰命名自动转换
     2. 需要进行复杂的**一对一**或**一对多**的关联查询
 
-  - **优先级**: 当 `resultMap` 被指定时，MyBatis 会完全忽略 `resultType` 属性。
+  - **优先级**: 当 `resultMap` 被指定时，MyBatis 会完全忽略 `resultType` 属性
 
     
 
 - **`parameterType` (可选)**:
 
-  - **作用**: 指定传入这条 SQL 语句的参数的 Java 类型。
-  - **用法**: `parameterType="com.example.entity.User"` 或 `parameterType="int"`。
-  - **为何可选**: MyBatis 拥有强大的类型推断能力，绝大多数情况下可以根据传入的参数自动识别其类型，因此这个属性**通常可以省略**，以保持 XML 的简洁
+  - **作用**: 指定传入这条 SQL 语句的参数的 Java 类型
+  - **用法**: `parameterType="com.example.entity.User"` 或 `parameterType="int"`
+  - **为何可选**: 
+    - MyBatis 拥有强大的类型推断能力，绝大多数情况下可以根据传入的参数自动识别其类型，因此这个属性**通常可以省略**，以保持 XML 的简洁
 
 
 
@@ -1101,13 +1102,13 @@ public interface UserMapper {
 - Mapper 接口方法的返回值类型决定了 MyBatis 如何处理查询结果：
 
   - **返回单个对象**: `User findById(int id);`
-    - 如果查询返回多行，MyBatis 会抛出 `TooManyResultsException` 异常。
+    - 如果查询返回多行，MyBatis 会抛出 `TooManyResultsException` 异常
 
   - **返回对象集合**: `List<User> findAll();`
-    - 即使查询结果为空，也会返回一个空的 `List`，而不是 `null`。
+    - 即使查询结果为空，也会返回一个空的 `List`，而不是 `null`
 
   - **返回 Map**: `Map<String, User> findUsersMap();` (需要配合 `@MapKey` 注解)
-    - 可以将查询结果列表转换为一个 Map，便于快速查找。
+    - 可以将查询结果列表转换为一个 Map，便于快速查找
 
   - **返回 Optional (Java 8+)**: `Optional<User> findById(int id);`
     - 优雅地处理可能为 `null` 的查询结果。
@@ -1158,8 +1159,10 @@ public interface UserMapper {
 - **`parameterType` (可选)**:
 
   - **作用**: 指定传入这条 SQL 语句的参数的 Java 类型。
-  - **用法**: `parameterType="com.example.entity.User"` 或 `parameterType="int"`。
-  - **为何可选**: MyBatis 拥有强大的类型推断能力，绝大多数情况下可以根据传入的参数自动识别其类型，因此这个属性**通常可以省略**，以保持 XML 的简洁
+  - **用法**: `parameterType="com.example.entity.User"` 或 `parameterType="int"`
+  - **为何可选**: 
+    - MyBatis 拥有强大的类型推断能力，绝大多数情况下可以根据传入的参数自动识别其类型，因此这个属性**通常可以省略**，以保持 XML 的简洁
+
 
   
 
@@ -1172,9 +1175,17 @@ public interface UserMapper {
 
 - **`keyProperty` (常用)**:
 
-  - **作用**: 与 `useGeneratedKeys`属性 或 `<selectKey>` 标签配合，指定将获取到的主键值赋给**参数对象**的哪个属性
-  - 和`<selectKey>`互斥
-  - **用法**: `keyProperty="id"`。假设你传入一个 `User` 对象，MyBatis 在插入成功后，会自动调用 `user.setId(generatedKey)`
+  - **作用**: 
+
+    - 与 `useGeneratedKeys`属性 或 `<selectKey>` 标签配合，指定将获取到的主键值赋给**参数对象**的哪个属性
+    - 和 `<selectKey>` 互斥
+
+  - **用法**: 
+
+    - `keyProperty="id"`
+
+      > 假设你传入一个 `User` 对象，MyBatis 在插入成功后，会**自动调用 `user.setId(generatedKey)`**⭐
+
 
   
 
@@ -1188,7 +1199,7 @@ public interface UserMapper {
 
   - 对于不支持主键自增的数据库（如 Oracle 的序列），或需要在插入前生成主键（如 UUID）的场景，需要使用 `<selectKey>`
 
-  - 和**keyProperty**互斥
+  - 和 **keyProperty** 互斥
 
     
 
@@ -1483,22 +1494,31 @@ public interface UserMapper {
 
 - 返回 `Map` 是一种特殊情况，用于需要通过唯一键快速查找对象的场景。直接在 XML 中指定 `resultType` 是不够的
 
-  1. **需要 `@MapKey` 注解**：你必须在 Mapper 接口的方法上添加 `@MapKey("propertyName")` 注解，其中 `propertyName` 是 Java 对象中某个属性的名称，该属性对应的值将作为 Map 的 Key
+  1. **需要 `@MapKey` 注解**：
 
-     ```java
-     @MapKey("id") // 使用 User 对象的 id 属性作为 Map 的 key
-     Map<Long, User> findAllUsersAsMap();
-     ```
+     - 你必须在 Mapper 接口的方法上添加 `@MapKey("propertyName")` 注解，其中 `propertyName` 是 Java 对象中某个属性的名称，该属性对应的值将作为 Map 的 Key
+  
+        ```java
+        @MapKey("id") // 使用 User 对象的 id 属性作为 Map 的 key
+        Map<Long, User> findAllUsersAsMap();
+        ```
 
+  
+     
+  
   2. **创建空映射**：MyBatis 会先创建一个空的 `HashMap`
-
+  
   3. **循环处理每一行**： 
-
+  
      - a. 为每一行创建一个 `resultType` 指定的对象（作为 Map 的 Value）
      - b. 从这个新创建的对象中，获取 `@MapKey` 注解指定的属性值（如 `user.getId()`），作为 Map 的 Key
      - c. 将 `(Key, Value)` 这个键值对 `put` 到 Map 
-
-  4. **返回映射**：返回最终的 `Map`。如果结果集中有多行的 Key 是相同的，后处理的行会**覆盖**先处理的行。
+  
+  4. **返回映射**：
+  
+     - 返回最终的 `Map`
+  
+       如果结果集中有多行的 Key 是相同的，后处理的行会**覆盖**先处理的行
 
 
 
@@ -3017,7 +3037,7 @@ MyBatis 允许你通过实现 `Cache` 接口，将二级缓存替换为专业的
 
     - `Page<E>` 继承自 `ArrayList<E>`，我们可以用 `List<E>` 来接收查询结果
 
-      这意味着，当你执行分页查询后，从 Mapper 层返回的 `List<T>` 对象的**真实类型**其实就是 `Page<T>`
+      这意味着，当你**执行分页查询后**，从 Mapper 层返回的 `List<T>` 对象的**真实类型**其实就是 `Page<T>`⭐
 
   - **工作机制**：
 
@@ -3160,24 +3180,27 @@ MyBatis 允许你通过实现 `Cache` 接口，将二级缓存替换为专业的
 - **线程安全原理 (`ThreadLocal`)** 
 
 
-    - `PageHelper.startPage()` 方法是**线程安全**的
+  - `PageHelper.startPage()` 方法是**线程安全**的
 
-      它的原理是使用 `ThreadLocal` 来存储分页参数，
+
+    - 它的原理是使用 `ThreadLocal` 来存储分页参数，	
       当调用 `startPage()` 时，它会将分页信息（如 `pageNum`, `pageSize`）放入当前线程的 `ThreadLocal` 变量中
       当紧随其后的 MyBatis 查询被拦截时，插件会从 `ThreadLocal` 中取出这些参数来构建分页 SQL
       查询结束后，`ThreadLocal` 中的数据会被自动清除
+    
+    - 由于上述 `ThreadLocal` 的原理，**`PageHelper.startPage(pageNum, pageSize)` 必须紧邻查询方法**
+    
+      如果在它们之间执行了任何其他数据库操作，PageHelper 会被错误地消费，导致分页失败
 
-      - 由于上述 `ThreadLocal` 的原理，**`PageHelper.startPage(pageNum, pageSize)` 必须紧邻查询方法**
 
-        如果在它们之间执行了任何其他数据库操作，PageHelper 会被错误地消费，导致分页失败
-
+      - 错误示例
+    
         ```java
         // 错误示例
         PageHelper.startPage(1, 10);
         long count = userMapper.countAll(); // 这个查询会消费掉分页设置
         List<User> list = userMapper.findAll(); // 这个查询将不会被分页
         ```
-
 
 
 
@@ -3199,5 +3222,4 @@ MyBatis 允许你通过实现 `Cache` 接口，将二级缓存替换为专业的
   - PageHelper 对复杂的 `JOIN` 查询和动态 SQL 提供了良好的支持
 
     它足够智能，能够正确地将分页语句应用到复杂查询上，并生成正确的 `count` 查询
-
 
