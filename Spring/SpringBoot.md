@@ -3032,54 +3032,7 @@ logging:
 
 
 
-## 3. 声明式缓存 (Caching)
-
-- **要解决的问题**: 对于那些不经常变化但查询频繁的数据（如商品分类、配置信息），每次都从数据库中读取会造成不必要的性能开销。
-
-- **解决方案**: **缓存**。将第一次查询的结果存放在速度更快的介质中（如内存或 Redis），后续的相同查询直接从缓存中获取结果，避免了对数据库的访问。Spring 提供了**声明式缓存**，让你只需通过几个注解就能为方法添加缓存逻辑，无需侵入业务代码。
-
-- **开启**: 在启动类或任意配置类上添加 **`@EnableCaching`**。
-
-- **核心注解**:
-
-  - **`@Cacheable`**: 主要用于**查询**操作。方法执行前先根据 `key` 查缓存，如果命中则直接返回缓存结果，**不执行方法**。如果未命中，则执行方法，并将返回值放入缓存。
-  - **`@CachePut`**: 主要用于**更新**操作。方法**总是会**被执行，然后将其返回值（通常是更新后的对象）更新到缓存中。它的 `key` 必须与 `@Cacheable` 的 `key` 保持一致。
-  - **`@CacheEvict`**: 主要用于**删除**操作。当方法执行时，会从缓存中移除指定 `key` 的数据。`allEntries = true` 属性可以清空整个缓存。
-
-- **常用属性**:
-
-  - `value` 或 `cacheNames`: 指定缓存的名称（可以理解为缓存的命名空间）。
-  - `key`: 自定义缓存的 key，支持强大的 **SpEL (Spring Expression Language)** 表达式。例如 `key = "#id"` 表示使用名为 `id` 的方法参数作为 key。
-  - `condition`: 满足条件时才缓存。例如 `condition = "#result != null"` 表示只有当方法返回值不为 null 时才缓存。
-  - `unless`: 满足条件时**不**缓存。
-
-- **示例**:
-
-  ```java
-  @Service
-  public class BookService {
-      @Cacheable(value = "books", key = "#isbn")
-      public Book findBook(String isbn) {
-          // ... 模拟从数据库中查询书籍的耗时操作 ...
-          return findBookInDB(isbn);
-      }
-  
-      @CachePut(value = "books", key = "#book.isbn")
-      public Book updateBook(Book book) {
-          // ... 更新数据库中的书籍 ...
-          return book;
-      }
-  
-      @CacheEvict(value = "books", key = "#isbn")
-      public void deleteBook(String isbn) {
-          // ... 从数据库中删除书籍 ...
-      }
-  }
-  ```
-
-
-
-## 4. 测试
+## 3. 测试
 
 - **测试类型**:
   - **单元测试**: 针对单个类或方法的测试，不依赖 Spring 容器，速度快。

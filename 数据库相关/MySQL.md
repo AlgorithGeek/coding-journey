@@ -74,7 +74,8 @@
 
   - **跨平台**：可以在多种操作系统上运行，包括 Linux、Windows 和 macOS。
 
-  - **技术栈中的关键角色**：在经典的 Web 技术栈 **LAMP** (Linux + Apache + MySQL + PHP/Python/Perl) 和 **LNMP** (Linux + Nginx + MySQL + PHP/Python/Perl) 中，MySQL 承担着核心的数据存储任务。
+  - **技术栈中的关键角色**：
+    - 在经典的 Web 技术栈 **LAMP** (Linux + Apache + MySQL + PHP/Python/Perl) 和 **LNMP** (Linux + Nginx + MySQL + PHP/Python/Perl) 中，MySQL 承担着核心的数据存储任务
 
 - MySQL 是一个你可以实际安装、部署并用于应用程序开发的、功能强大的开源 RDBMS 软件
 

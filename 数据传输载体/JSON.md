@@ -113,10 +113,10 @@ JSON 支持以下几种数据类型：
 
 ## 常见应用场景
 
-1. **Web APIs**：绝大多数现代的 RESTful API 都使用 JSON 作为请求和响应的数据格式。
-2. **配置文件**：许多应用程序（如 VS Code、npm）使用 `.json` 文件来存储配置信息。
-3. **前后端数据交换**：在现代 Web 开发（如 React, Vue, Angular）中，前端框架通过 API 从后端获取 JSON 数据，然后在页面上渲染。
-4. **NoSQL 数据库**：像 MongoDB 这样的文档数据库直接以类似 JSON 的格式（BSON）存储数据。
+1. **Web APIs**：绝大多数现代的 RESTful API 都使用 JSON 作为请求和响应的数据格式
+2. **配置文件**：许多应用程序（如 VS Code、npm）使用 `.json` 文件来存储配置信息
+3. **前后端数据交换**：在现代 Web 开发（如 React, Vue, Angular）中，前端框架通过 API 从后端获取 JSON 数据，然后在页面上渲染
+4. **NoSQL 数据库**：像 MongoDB 这样的文档数据库直接以类似 JSON 的格式（BSON）存储数据
 
 
 
