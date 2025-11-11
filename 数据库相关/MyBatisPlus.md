@@ -336,9 +336,9 @@
 
 - **使用场景**：
 
-  1. 当**属性名**和**列名**不符合驼峰 -下划线转换规则时
+  1. 当 **属性名** 和 **列名** 不符合驼峰 -下划线转换规则时
 
-  2. 当实体类中的某个属性**不是数据库表的字段**时，需要忽略它(`exist`)
+  2. 当实体类中的某个属性 **不是数据库表的字段** 时，需要忽略它(`exist`)
 
   3. 当需要实现**自动填充**功能时（如 `create_time`, `update_time`）
 
@@ -2256,7 +2256,11 @@ wrapper.nested(w -> w.gt(User::getAge, 25).like(User::getName, "张"))
 
 # 一些问题与注意点
 
-## 1
+## 1. 底层对`Entity::getXXX`的使用
+
+很多人在遇到这里的时候会有非常大的疑惑，包括我也是，我当时以为是直接使用这个引用的方法，
+
+比如下面示例中我当时就以为要执行这个 `getBalance()` 方法的逻辑，对底层原理不请求，百思不得其解
 
 ```java
 lambdaUpdate().set(User::getBalance,remainBalance)
@@ -2264,34 +2268,143 @@ lambdaUpdate().set(User::getBalance,remainBalance)
                 .eq(User::getId,id);
 ```
 
-- 这里的`::getXX`，底层其实是通过反射进行了操作，获取了字段等，并不是说底层疯狂调用方法啥的
+但是其实啊，这里用来获取字段名的
+
+先来看看传统写法
+
+```java
+// 传统写法（容易写错字段名）
+queryWrapper.eq("name", "张三");
+
+// Lambda 写法（类型安全，重构友好）
+lambdaQuery.eq(User::getName, "张三");
+```
+
+所以这里的这个方法，主要的目的就是为了让我们能够类型安全的把数据库字段名写进去，并且它方法引用，足够快捷，我给予极高的评价
+
+⭐ 底层是 **通过反射获取出来了方法名，之后转换为了字段名**，示例如下
+
+```java
+public class LambdaUtils {
+    
+    public static <T> String getColumnName(SFunction<T, ?> func) {
+        // 1. 将 Lambda 表达式序列化
+        SerializedLambda serializedLambda = getSerializedLambda(func);
+        
+        // 2. 获取方法名，例如 "getName" ⭐⭐
+        String methodName = serializedLambda.getImplMethodName();
+        
+        // 3. 转换为字段名 ⭐⭐
+        String fieldName = methodToProperty(methodName); // getName -> name
+        
+        // 4. 转换为数据库字段名（驼峰转下划线）⭐⭐
+        String columnName = camelToUnderscore(fieldName); // name -> name, userName -> user_name
+        
+        return columnName;
+    }
+    
+    private static SerializedLambda getSerializedLambda(Serializable fn) {
+        try {
+            Method method = fn.getClass().getDeclaredMethod("writeReplace");
+            method.setAccessible(true);
+            return (SerializedLambda) method.invoke(fn);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+    
+    private static String methodToProperty(String methodName) {
+        // getName -> name
+        // isActive -> active
+        if (methodName.startsWith("get")) {
+            methodName = methodName.substring(3);
+        } else if (methodName.startsWith("is")) {
+            methodName = methodName.substring(2);
+        }
+        // 首字母小写
+        return methodName.substring(0, 1).toLowerCase() + methodName.substring(1);
+    }
+    
+    /**
+     * 驼峰转下划线
+     * userName -> user_name
+     * userId -> user_id
+     * createTime -> create_time
+     */
+    private static String camelToUnderscore(String camelCase) {
+        if (camelCase == null || camelCase.isEmpty()) {
+            return camelCase;
+        }
+        
+        StringBuilder result = new StringBuilder();
+        // 第一个字符直接添加（小写）
+        result.append(Character.toLowerCase(camelCase.charAt(0)));
+        
+        // 从第二个字符开始遍历
+        for (int i = 1; i < camelCase.length(); i++) {
+            char ch = camelCase.charAt(i);
+            if (Character.isUpperCase(ch)) {
+                // 遇到大写字母，添加下划线和小写字母
+                result.append('_');
+                result.append(Character.toLowerCase(ch));
+            } else {
+                result.append(ch);
+            }
+        }
+        
+        return result.toString();
+    }
+}
+```
 
 
 
-## 2
+## 2. MybatisPlus 对于 `null` 的处理
 
-- 像这种代码
+### 默认行为
+
+⭐**默认情况下，MyBatis-Plus 在执行插入和更新操作时，值为 null 的字段会被忽略，不会出现在生成的 SQL 语句中**
+
+
+
+### 手动处理
+
+如果需要让 MyBatis-Plus 处理 null 值，有以下几种方法：
+
+
+
+- **方法一：使用 `XXXUpdateWrapper` 显式设置 `null`**
 
   ```java
-  lambdaQuery().select(ImApprovalTemplateGroup::getSortNum).list();
+  UpdateWrapper<User> wrapper = new UpdateWrapper<>();
+  wrapper.set("name", null).eq("id", 1);
+  userMapper.update(null, wrapper);
   ```
 
-  只查一个字段的，返回值是什么？难道也是完整对象？
-
-  - **答案**
-
-    返回值**仍然是 `List<ImApprovalTemplateGroup>`**，也就是一个**【完整对象】的列表**
-
-    但是，**这些对象里的字段，只有 `sortNum` (以及主键字段) 是有值的，其他字段（如 `name`, `createTime` 等）都会是 `null`**
-
-    - 如果我只想要那个字段的 `List` 怎么办？
-
-      - 方法一：使用 `listMaps()`，使用 `listMaps` 返回 `List<Map<String, Object>>`，然后自己提取
-      - 方法二：使用 `listObjs()`，如果你**确定只查询一个字段**，`listObjs` 是最方便的。它会返回一个 `List<Object>`，但列表里装的就是你查询的那个字段的值
-
-      > 我也不知道怎么说，怪怪的，实战中再积累吧，有些东西没法做出笔记
 
 
+- **方法二：配置字段策略**
+
+  > 见前文“注解”部分
+
+  - 通过 `@TableField` 注解的 `insertStrategy` 和 `updateStrategy` 属性控制单个字段
+
+  - 或在配置文件中设置全局策略
+
+    ```java
+    // 字段级配置
+    @TableField(updateStrategy = FieldStrategy.IGNORED)
+    private String name;
+    ```
+
+    ```yaml
+    # 全局配置
+    mybatis-plus:
+      global-config:
+        db-config:
+          insert-strategy: ignored  # 或 not_null
+          update-strategy: ignored
+    ```
 
 
 

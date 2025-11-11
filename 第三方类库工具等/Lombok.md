@@ -1,12 +1,12 @@
 # Lombok 简介
 
-- **Lombok** 是一个第三方 Java工具库
+**Lombok** 是一个第三方 Java工具库
 
-  - 它通过注解的方式，在编译时自动为 Java类 生成那些冗长乏味的“样板代码”，
+- 它通过注解的方式，在编译时自动为 Java类 生成那些冗长乏味的“样板代码”，
 
-    > 例如 `getter/setter` 方法、构造函数、`toString()`、`equals()` 和 `hashCode()` 等
+  > 例如 `getter/setter` 方法、构造函数、`toString()`、`equals()` 和 `hashCode()` 等
 
-- **核心作用：**是消除代码冗余，让代码库更加简洁、可读和易于维护，从而显著提升开发效率
+**核心作用：**是消除代码冗余，让代码库更加简洁、可读和易于维护，从而显著提升开发效率
 
 
 
@@ -21,23 +21,25 @@
     <dependency>
         <groupId>org.projectlombok</groupId>
         <artifactId>lombok</artifactId>
-        <version>XXX</version>
+        <version>XXX</version>	<!-- 这里是版本号 -->
         <scope>provided</scope>
     </dependency>
 </dependencies>
 ```
 
-- **注意**: `scope`被设置为`provided`，因为Lombok主要在编译期间起作用，运行时并不需要它
+**注意**: `scope`被设置为`provided`，因为Lombok主要在编译期间起作用，运行时并不需要它
 
 
 
 ### 2.在IDEA中安装 Lombok 插件
 
-- **为什么都引入依赖了，还需要IDE插件？**
+**为什么都引入依赖了，还需要IDE插件？**
 
-  -  如果没有插件，IDE将无法识别 Lombok 在编译期生成的那些方法（如`getName()`），因此会在你的代码中显示编译错误，尽管项目本身可以成功构建
+-  如果没有插件，IDE将无法识别 Lombok 在编译期生成的那些方法（如`getName()`），因此会在你的代码中显示编译错误，尽管项目本身可以成功构建
 
-    插件能让IDE理解这些注解并提供正确的代码提示和语法检查
+  插件能让IDE理解这些注解并提供正确的代码提示和语法检查
+  
+  
 
 - **插件图**
 

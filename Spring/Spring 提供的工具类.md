@@ -1381,9 +1381,9 @@
 
   - 将源对象 (`source`) 的属性值复制到目标对象 (`target`)
   - 复制是基于 `source` 对象的 `get` 方法和 `target` 对象的 `set` 方法
-  - 只有当 `source` 和 `target` 拥有**相同属性名**，并且**数据类型兼容**时，才会发生复制⭐
-  - 这是一个**浅拷贝**（Shallow Copy）。如果属性是对象（如 `List` 或自定义类），复制的是引用（内存地址），而不是对象本身
-  - **[重要]** 此方法会**复制 `null` 值**。如果 `source` 中的某个属性为 `null`，它会将 `target` 中对应的属性也设置为 `null`
+  - ⭐只有当 `source` 和 `target` 拥有**相同属性名**，并且**数据类型兼容**时，才会发生复制
+  - 这是一个**浅拷贝**。如果属性是对象（如 `List` 或自定义类），复制的是引用（内存地址），而不是对象本身
+  - ⭐此方法会**复制 `null` 值**。如果 `source` 中的某个属性为 `null`，它会将 `target` 中对应的属性也设置为 `null`
 
 - **示例**:
 
@@ -1491,8 +1491,13 @@
 - **核心功能**:
 
   - 实例化一个给定的类 (`clazz`)
+
   - 此方法会**自动查找并使用该类的默认（无参）构造函数**来创建对象
-  - 相比于 `clazz.newInstance()` (已废弃) 或 `clazz.getDeclaredConstructor().newInstance()`，`instantiateClass` 提供了更好的封装和异常处理：
+
+  - 相比于 `clazz.newInstance()` (已废弃) 或 `clazz.getDeclaredConstructor().newInstance()`，
+    
+    `instantiateClass` 提供了更好的封装和异常处理：
+    
     1. 它会尝试访问**非 public** (例如 `private`) 的无参构造函数
     2. 它将反射相关的受检异常 (Checked Exceptions, 如 `NoSuchMethodException`) 转换为 Spring 的运行时异常 (Unchecked Exceptions, 如 `BeanInstantiationException`)，使代码更简洁
 
@@ -1518,7 +1523,7 @@
   }
   ```
 
-- **主要用途**: 当你确定一个类有默认构造函数时，用它来创建实例。
+- **主要用途**: 当你确定一个类有默认构造函数时，用它来创建实例
 
 
 
@@ -1814,9 +1819,9 @@
 
 - **核心功能**:
 
-  - 判断传入的 `Collection` 是否为 `null` 或者 `empty` (即 `size()` 为 0)。
-  - 如果是 `null` 或 `empty`，则返回 `true`；
-  - 否则返回 `false`。
+  - 判断传入的 `Collection` 是否为 `null` 或者 `empty` (即 `size()` 为 0)
+  
+    如果是 `null` 或 `empty`，则返回 `true`，否则返回 `false`
 
 - **示例**:
 
@@ -1846,8 +1851,8 @@
 - **核心功能**:
 
   - 判断传入的 `Map` 是否为 `null` 或者 `empty` (即 `size()` 为 0)。
-  - 如果是 `null` 或 `empty`，则返回 `true`；
-  - 否则返回 `false`。
+  
+    如果是 `null` 或 `empty`，则返回 `true`，否则返回 `false`。
 
 - **示例**:
 

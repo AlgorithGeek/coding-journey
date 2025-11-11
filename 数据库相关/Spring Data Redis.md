@@ -572,17 +572,41 @@ User user = objectMapper.readValue(json, User.class);
 
 1. **Key 序列化器 (KeySerializer)**: 使用 `StringRedisSerializer`
    - 确保所有 Key 都是可读的字符串，方便调试
+   
+   
+   
 2. **Value 序列化器 (ValueSerializer)**: 使用 `Jackson2JsonRedisSerializer`
    - 确保所有非字符串的 Value（如 `User` 对象）都被自动序列化为 **JSON 字符串** 存储
    - JSON 格式可读性强、跨语言通用
+   
+   
+   
 3. **Hash Key 序列化器 (HashKeySerializer)**: 使用 `StringRedisSerializer`
    - 确保 Hash 结构中的 Field 是可读的字符串
+   
+   
+   
 4. **Hash Value 序列化器 (HashValueSerializer)**: 使用 `Jackson2JsonRedisSerializer`
    - 确保 Hash 结构中的 Value 是 JSON 字符串
 
 
 
 #### 5.2 配置类代码
+
+这里先提及一个概念：`RedisConnectionFactory` 是 Spring Data Redis 框架中的一个**核心接口**
+
+- 它的唯一职责就是：**创建和管理与 Redis 服务器之间的物理网络连接**
+
+```java
+//下面这两行代码完成了 RedisTemplate Bean 的创建和 连接工厂 的装配
+//RedisTemplate必须持有 RedisConnectionFactory 才能与 Redis 服务器通信
+RedisTemplate<String, Object> template = new RedisTemplate<>();
+template.setConnectionFactory(factory);
+```
+
+
+
+##### 示例1 (手动配置版)
 
 ```java
 package com.example.config;
@@ -653,8 +677,46 @@ public class RedisConfig {
         template.setHashValueSerializer(jsonSerializer);
 
         // --- 3. 初始化 Template ---
+        //用于在所有属性设置完成后进行初始化检查和默认值设置，手动创建Bean时,需要手动调用
+        //Spring自动管理时，它由Spring自动调用
         template.afterPropertiesSet();
         
+        return template;
+    }
+}
+```
+
+
+
+##### 示例2 (推荐版,自动版)
+
+> 他俩的实现效果几乎相同，但是第一个 会序列化私有字段，因为
+> `om.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);`
+
+```java
+// Spring Boot 环境下的【最佳实践】
+@Configuration
+public class RedisConfig {
+
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        template.setConnectionFactory(factory);
+
+        // 1. 使用【通用】JSON 序列化器
+        // 这个序列化器在内部已经配置好了, 会自动添加 "@class" 属性
+        GenericJackson2JsonRedisSerializer serializer = 
+            new GenericJackson2JsonRedisSerializer();
+
+        // 2. 设置序列化器
+        template.setKeySerializer(new StringRedisSerializer());
+        template.setValueSerializer(serializer);
+        template.setHashKeySerializer(new StringRedisSerializer());
+        template.setHashValueSerializer(serializer);
+        
+        //用于在所有属性设置完成后进行初始化检查和默认值设置，手动创建Bean时,需要手动调用
+        //Spring自动管理时，它由Spring自动调用
+        template.afterPropertiesSet();
         return template;
     }
 }

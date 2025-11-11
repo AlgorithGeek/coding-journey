@@ -390,9 +390,11 @@
 
 ### 原则：两个独立且方向相反的流程
 
-- 理解MyBatis的关键在于，要将“数据从Java流向数据库”和“数据从数据库流向Java”看作两个完全独立、互不干扰的流程
-  1. **数据输出 (Java -> SQL)**：此流程的主角是 **`#{}`**，它的任务是**从Java参数中取值**
-  2. **数据输入 (SQL -> Java)**：此流程的主角是**结果映射**，它的任务是**将查询结果填充到Java对象中**
+理解MyBatis的关键在于，要将“数据从Java流向数据库”和“数据从数据库流向Java”看作两个完全独立、互不干扰的流程
+1. **数据输出 (Java -> SQL)**：此流程的主角是 **`#{}`**，它的任务是 **从Java参数中取值**
+2. **数据输入 (SQL -> Java)**：此流程的主角是**结果映射**，它的任务是 **将查询结果填充到Java对象中**
+
+
 
 ### 流程一：数据输出 - `#{}` 的世界
 
@@ -610,29 +612,29 @@
 
 ### 1. 为什么需要 `@Param`？
 
-- **痛点一：参数名丢失**
+**痛点一：参数名丢失**
 
-  - **背景**：在 Java 8 之前，或者编译时没有添加 `-parameters` 编译标志，方法的形参名在编译成 `.class` 文件后会丢失，变成无意义的 `arg0`, `arg1`, `arg2`...
-  - **后果**：MyBatis 无法通过反射获取到你编写的真实参数名（如 `userId`），因此它不知道 `#{userId}` 到底对应哪个参数，导致绑定失败。
+- **背景**：在 Java 8 之前，或者编译时没有添加 `-parameters` 编译标志，方法的形参名在编译成 `.class` 文件后会丢失，变成无意义的 `arg0`, `arg1`, `arg2`...
+- **后果**：MyBatis 无法通过反射获取到你编写的真实参数名（如 `userId`），因此它不知道 `#{userId}` 到底对应哪个参数，导致绑定失败
 
-- **痛点二：多参数歧义**
+**痛点二：多参数歧义**
 
-  - **背景**：当一个 Mapper 方法有多个参数时，即使参数名得以保留，MyBatis 也无法确定哪个 `#{...}` 占位符对应哪个参数。
+- **背景**：当一个 Mapper 方法有多个参数时，即使参数名得以保留，MyBatis 也无法确定哪个 `#{...}` 占位符对应哪个参数。
 
-  - **示例（错误用法）**:
+- **示例（错误用法）**:
 
-    ```java
-    // MyBatis 会抛出异常，因为它不知道 #{username} 是 name 还是 #{password} 是 pwd
-    User findByCredentials(String name, String pwd);
-    ```
+  ```java
+  // MyBatis 会抛出异常，因为它不知道 #{username} 是 name 还是 #{password} 是 pwd
+  User findByCredentials(String name, String pwd);
+  ```
 
-    对应的 SQL:
+  对应的 SQL:
 
-    ```xml
-    <select id="findByCredentials" resultType="User">
-      select * from user where username = #{username} and password = #{password}
-    </select>
-    ```
+  ```xml
+  <select id="findByCredentials" resultType="User">
+    select * from user where username = #{username} and password = #{password}
+  </select>
+  ```
 
 
 
@@ -660,7 +662,7 @@
 
 - **场景一：单个简单参数**
 
-  - **定义**：参数类型为 Java 的基本类型、包装类、`String` 等。
+  - **定义**：参数类型为 Java 的基本类型、包装类、`String` 等
 
   - **不推荐的做法**（依赖编译配置）：
 
@@ -676,7 +678,7 @@
     void deleteById(@Param("id") Integer userId); // SQL: ... where id = #{id}
     ```
 
-    > **结论**：即使只有一个简单参数，也**推荐使用 `@Param`**，这让你的代码更加健壮，不受环境影响。
+    > **结论**：即使只有一个简单参数，也**推荐使用 `@Param`**，这让你的代码更加健壮，不受环境影响
 
 - **场景二：多个简单参数**
 
@@ -702,7 +704,7 @@
 
 - **场景三：单个复杂对象 (POJO)**
 
-  - **结论**：**通常不需要使用 `@Param`**。MyBatis 会自动将对象的属性作为参数。
+  - **结论**：**通常不需要使用 `@Param`**。MyBatis 会自动将对象的属性作为参数
 
   - **代码示例**:
 
@@ -719,7 +721,7 @@
     </insert>
     ```
 
-    > **注意**：SQL 中的 `#{username}` 实际上是 `#{user.username}` 的简写。MyBatis 会自动寻找传入的 POJO 对象中名为 `username` 的 `getter` 方法 (`getUsername()`) 来获取值。
+    > **注意**：SQL 中的 `#{username}` 实际上是 `#{user.username}` 的简写。MyBatis 会自动寻找传入的 POJO 对象中名为 `username` 的 `getter` 方法 (`getUsername()`) 来获取值
 
     
 
@@ -796,18 +798,18 @@ mybatis:
 
 | 属性名         | 类型       | 描述                                                         |
 | -------------- | ---------- | ------------------------------------------------------------ |
-| **`property`** | `String`   | **[必需]** Java POJO 中的**属性名** (`userName`)。           |
+| **`property`** | `String`   | **[必需]** Java POJO 中的**属性名** (`userName`)             |
 | **`column`**   | `String`   | **[必需]** 数据库查询结果集中的**列名或别名** ( `user_name`) |
-| **`id`**       | `boolean`  | 默认为 `false`。设置为 `true` 表示该属性是**主键**，等同于 XML 中的 `<id>` 标签。标记主键有助于 MyBatis 提升缓存和嵌套查询的性能。 |
-| `javaType`     | `Class<?>` | 属性的 Java 类型。通常 MyBatis 能通过反射自动推断，一般无需手动指定。 |
-| `jdbcType`     | `JdbcType` | 数据库字段的 JDBC 类型。通常也无需手动指定。                 |
+| **`id`**       | `boolean`  | 默认为 `false`。设置为 `true` 表示该属性是**主键**，等同于 XML 中的 `<id>` 标签。标记主键有助于 MyBatis 提升缓存和嵌套查询的性能 |
+| `javaType`     | `Class<?>` | 属性的 Java 类型。通常 MyBatis 能通过反射自动推断，一般无需手动指定 |
+| `jdbcType`     | `JdbcType` | 数据库字段的 JDBC 类型。通常也无需手动指定                   |
 
 ##### `@Results` 的核心属性
 
 | 属性名      | 类型        | 描述                                                         |
 | ----------- | ----------- | ------------------------------------------------------------ |
-| **`value`** | `@Result[]` | **[必需]** 一个 `@Result` 注解数组，用于存放一条或多条具体的映射规则。 |
-| **`id`**    | `String`    | **[可选]** 给这套映射规则起一个唯一的ID名称。设置后，其他的查询方法就可以通过 `@ResultMap("id")` 注解来复用这套规则，避免重复定义。 |
+| **`value`** | `@Result[]` | **[必需]** 一个 `@Result` 注解数组，用于存放一条或多条具体的映射规则 |
+| **`id`**    | `String`    | **[可选]** 给这套映射规则起一个唯一的ID名称<br />设置后，其他的查询方法就可以通过 `@ResultMap("id")` 注解来复用这套规则，避免重复定义 |
 
 
 
@@ -1164,7 +1166,7 @@ public interface UserMapper {
     - MyBatis 拥有强大的类型推断能力，绝大多数情况下可以根据传入的参数自动识别其类型，因此这个属性**通常可以省略**，以保持 XML 的简洁
 
 
-  
+
 
 - **`useGeneratedKeys` (常用)**:
 
@@ -1187,7 +1189,7 @@ public interface UserMapper {
       > 假设你传入一个 `User` 对象，MyBatis 在插入成功后，会**自动调用 `user.setId(generatedKey)`**⭐
 
 
-  
+
 
 - **`keyColumn`**:
 
@@ -1504,7 +1506,7 @@ public interface UserMapper {
         ```
 
   
-     
+  
   
   2. **创建空映射**：MyBatis 会先创建一个空的 `HashMap`
   
@@ -2775,92 +2777,1237 @@ public interface UserMapper {
 
 
 
-# **高级主题**
+# `${}`和`#{}`占位符
 
-## **1. 缓存机制**
+## 概述
 
-为了提升查询性能，MyBatis 内置了一套强大的缓存系统，分为一级缓存和二级缓存。
+MyBatis 提供了两种参数占位符，用于在 SQL 语句中引用参数：
 
-### **1.1 一级缓存**
+- `#{}` - 预编译参数占位符（推荐，安全）
+- `${}` - 字符串替换占位符（慎用，有风险）
 
-- **定义**：一级缓存是 **`SqlSession` 级别**的缓存。它是一个内置的、默认开启且无法关闭的缓存。
+**⚠️ 重要提示：** MyBatis 的 `#{}` 和 `${}` 与 Spring 中的含义**完全不同**
 
-- **作用域与生命周期**：它的生命周期与 `SqlSession` 完全绑定。在同一个 `SqlSession` 中，执行完全相同的查询，只有第一次会真正查询数据库。
-
-- **缓存失效（清空）的场景**：
-
-  1. 当 `SqlSession` 执行了任何 CUD 操作（`insert`, `update`, `delete`）时。
-  2. 手动调用 `sqlSession.clearCache()` 方法。
-  3. `SqlSession` 被关闭时。
-
-- **`localCacheScope` 设置**： 默认情况下，一级缓存的作用域是 `SESSION`。但可以通过在 `mybatis-config.xml` 中进行设置，将其作用域降为 `STATEMENT`，这意味着一级缓存仅在单个语句执行期间有效，每次语句执行完毕后都会清空。这实际上禁用了大部分一级缓存的效果。
-
-  ```
-  <settings>
-      <setting name="localCacheScope" value="STATEMENT"/>
-  </settings>
-  ```
-
-### **1.2 二级缓存**
-
-- **定义**：二级缓存是 **Mapper 命名空间 (`namespace`) 级别**的缓存，它可以被多个 `SqlSession` 共享。
-- **开启与配置**：
-  1. 全局开关：`<setting name="cacheEnabled" value="true"/>` (默认值)。
-  2. Mapper 配置：在 Mapper XML 中添加 `<cache/>` 标签。
-  3. POJO 序列化：所有被缓存的 POJO 类都**必须实现 `java.io.Serializable` 接口**。
-- **工作原理**：当一个 `SqlSession` 关闭或提交 (`commit`) 时，它的一级缓存中的数据才会被刷新到二级缓存中。
-- **缓存失效的场景**：当任何一个 `SqlSession` 对该 `namespace` 执行了 CUD 操作后，二级缓存会被清空。
-
-### **1.3 与第三方缓存集成**
-
-MyBatis 允许你通过实现 `Cache` 接口，将二级缓存替换为专业的第三方缓存框架，如 **Redis**、**Ehcache**，以实现分布式缓存。
-
-- **实现方式**：
-
-  1. 引入相应的第三方缓存适配器依赖（如 `mybatis-redis`, `mybatis-ehcache`）。
-  2. 在 `<cache>` 标签的 `type` 属性中，指定自定义缓存实现类的完全限定名或别名。
-
-  **示例：集成 Redis 缓存**
-
-  ```
-  <!-- 引入 mybatis-redis 依赖后 -->
-  <cache type="org.mybatis.caches.redis.RedisCache">
-      <property name="host" value="localhost"/>
-      <property name="port" value="6379"/>
-  </cache>
-  ```
-
-### **1.4 缓存查询顺序**
-
-当一个查询请求到来时，MyBatis 会按照以下顺序查找数据： **二级缓存 -> 一级缓存 -> 数据库**
+------
 
 
 
-## **2. 插件开发**
+## 1. `#{}` -  预编译参数 (推荐)
 
-插件是 MyBatis 提供的最强大的扩展点，它允许你通过**动态代理**的方式，拦截并修改 MyBatis 核心组件在运行时的行为。
+### 1.1 基本概念
 
-- **可拦截的四大对象**：`Executor`, `StatementHandler`, `ParameterHandler`, `ResultSetHandler`。
-- **实现方式**：实现 `Interceptor` 接口，并使用 `@Intercepts` 和 `@Signature` 注解声明要拦截的方法。
+`#{}` 是 MyBatis 中首选的、最安全的参数传递方式。它在 SQL 映射文件中用于指示一个参数的位置
+
+- **核心原理：**
+
+  -  `#{}` 在底层被解析为 JDBC 的 `PreparedStatement`（预编译语句）的参数占位符 `?`
+
+- **工作机制：** 
+
+  - MyBatis 会将 `#{}` 所在的 SQL 语句（包含 `?`）发送给数据库进行预编译
+
+    随后，将 `#{}` 传入的参数**作为独立的数据值**（而不是 SQL 语句的一部分）安全地设置到对应的 `?` 位置上
+
+- **安全性 (防 SQL 注入)：** 
+
+  - 这是 `#{}` 最大的优势
+
+    由于参数被当作纯数据处理，数据库不会将其作为 SQL 指令执行
+
+    即使传入恶意字符串（如 `OR '1'='1'`），它也只会被当作一个普通的字符串值进行查询，从而从根本上杜绝了 SQL 注入风险
+
+- **性能：** 
+
+  - 数据库可以缓存预编译过的 SQL 结构（执行计划）
+
+    对于同一条 SQL 语句的多次调用，只需替换参数值即可，减少了 SQL 解析的开销，提高了执行效率
+
+- **数据类型：**
+
+  -  `#{}` 会根据传入参数的 Java 类型（如 `String`, `Integer`）自动进行 JDBC 类型转换，并在必要时（如字符串类型）自动添加引号 (`'...'`)
 
 
 
-## **3. 延迟加载**
+### 1.2 工作原理
 
-- **定义**：也叫按需加载。当查询一个主对象时，并不会立即加载其关联的子对象，而是在你**第一次真正访问**那个子对象属性时才去查询。
-- **开启方式**：
-  1. 全局设置 `lazyLoadingEnabled` 为 `true`。
-  2. 在 `association` 或 `collection` 标签上使用**嵌套查询**的方式，并可设置 `fetchType="lazy"`。
-- **N+1 问题**：延迟加载是引发 "N+1" 问题的常见原因。对于需要同时展示主对象和关联对象的场景，应避免使用延迟加载，而是采用**嵌套结果**的方式。
+`#{}` 的执行过程清晰地展示了 SQL 指令和数据的分离：
+
+```XML
+<!-- MyBatis 配置 -->
+<select id="findById" resultType="User">
+    SELECT * FROM user WHERE id = #{id}
+</select>
+```
 
 
 
-## **4. 批量操作**
+**执行过程（MyBatis 内部逻辑）：**
 
-对于大量的 CUD 操作，MyBatis 提供了批量操作模式来优化性能。
+```JAVA
+// 1. MyBatis 解析 XML，生成包含 ? 的预编译 SQL 模板
+String sqlTemplate = "SELECT * FROM user WHERE id = ?";
 
-- **实现方式 1：使用 `ExecutorType.BATCH`** 这是最高效的方式。通过 `sqlSessionFactory.openSession(ExecutorType.BATCH)` 获取一个特殊模式的 `SqlSession`，它会缓存所有 SQL，并在 `flushStatements()` 被调用时一次性批量发送到数据库。
-- **实现方式 2：使用 `foreach` 动态 SQL** 这种方式更通用，尤其适用于支持 `INSERT ... VALUES (...), (...), ...` 语法的数据库。
+// 2. 获取数据库连接，创建 PreparedStatement
+PreparedStatement ps = connection.prepareStatement(sqlTemplate);
+
+// 3. 设置参数值（假设传入的 id 为 1L）
+// 这一步是关键，参数是作为 "值" 被设置的
+ps.setLong(1, 1L); 
+
+// 4. 执行查询
+ResultSet rs = ps.executeQuery();
+```
+
+
+
+**实际发送到数据库的 SQL：**
+
+```SQL
+-- 1. 预编译阶段 (发送 SQL 结构)
+PREPARE "SELECT * FROM user WHERE id = ?"
+-- 2. 执行阶段 (发送数据)
+EXECUTE (using 1L)
+```
+
+**总结：** MyBatis 负责生成带 `?` 的 SQL，JDBC 驱动负责安全地将参数 `1L` 绑定到 `?` 上
+
+
+
+### 1.3 基本使用示例⭐
+
+#### a. 单个参数
+
+当接口方法只有一个参数时，`#{}` 内部的名称可以是任意的（尽管推荐与参数名一致）
+
+```XML
+<!-- Mapper XML -->
+<select id="findById" resultType="User">
+    SELECT * FROM user WHERE id = #{id}
+</select>
+
+<select id="findByName" resultType="User">
+    <!-- 只有一个参数时，叫 #{name} 或 #{abc} 都可以 -->
+    SELECT * FROM user WHERE name = #{name}
+</select>
+```
+
+```JAVA
+// Mapper 接口
+public interface UserMapper {
+    User findById(Long id);
+    User findByName(String name);
+}
+```
+
+```JAVA
+// 使用
+User user1 = userMapper.findById(1L);        // SQL: WHERE id = ? (值: 1)
+User user2 = userMapper.findByName("张三");   // SQL: WHERE name = ? (值: '张三')
+```
+
+
+
+#### b. 多个参数
+
+当有多个参数时，MyBatis 默认无法区分 `#{}` 对应哪个参数，需要显式指定
+
+
+
+**方式 1：使用 @Param 注解（推荐）**
+
+这是最清晰的方式，通过 `@Param` 为每个参数命名
+
+```JAVA
+public interface UserMapper {
+    User findByNameAndAge(@Param("name") String name, @Param("age") Integer age);
+}
+```
+
+```XML
+<select id="findByNameAndAge" resultType="User">
+    SELECT * FROM user 
+    <!-- #{name} 和 #{age} 必须与 @Param 中定义的名称一致 -->
+    WHERE name = #{name} AND age = #{age}
+</select>
+```
+
+
+
+**方式 2：使用实体对象 (POJO)**
+
+当参数是一个对象时，`#{}` 内部的名称对应对象的属性名 (getter/setter)
+
+```JAVA
+public interface UserMapper {
+    int insert(User user);
+}
+```
+
+```XML
+<insert id="insert">
+    INSERT INTO user (name, age, email) 
+    <!-- #{name} 对应 user.getName() -->
+    VALUES (#{name}, #{age}, #{email})
+</insert>
+```
+
+
+
+**方式 3：使用 Map**
+
+当参数是一个 `Map` 时，`#{}` 内部的名称对应 Map 的 `key`
+
+```JAVA
+public interface UserMapper {
+    List<User> findByConditions(Map<String, Object> params);
+}
+```
+
+```XML
+<select id="findByConditions" resultType="User">
+    SELECT * FROM user 
+    <!-- #{name} 对应 params.get("name") -->
+    WHERE name = #{name} AND age = #{age}
+</select>
+```
+
+
+
+### 1.4 类型处理
+
+MyBatis 在设置参数时，会通过 `TypeHandler`（类型处理器）智能地处理不同数据类型，确保其在 JDBC 层面被正确转换
+
+
+
+#### a. 字符串类型
+
+MyBatis 会自动为字符串添加引号
+
+```xml
+<select id="findByName" resultType="User">
+    SELECT * FROM user WHERE name = #{name}
+</select>
+```
+
+```java
+// 传入: "Tom"
+// 1. 预编译 SQL: SELECT * FROM user WHERE name = ?
+// 2. 参数设置: ps.setString(1, "Tom")
+// 3. 执行效果: SELECT * FROM user WHERE name = 'Tom'
+```
+
+
+
+#### b. 数字类型
+
+数字类型不会添加引号
+
+```xml
+<select id="findByAge" resultType="User">
+    SELECT * FROM user WHERE age = #{age}
+</select>
+```
+
+```java
+// 传入: 25
+// 1. 预编译 SQL: SELECT * FROM user WHERE age = ?
+// 2. 参数设置: ps.setInt(1, 25)
+// 3. 执行效果: SELECT * FROM user WHERE age = 25
+```
+
+
+
+#### c. 日期类型
+
+日期类型会根据驱动转换为数据库兼容的日期/时间戳格式
+
+```xml
+<select id="findByCreateTime" resultType="User">
+    SELECT * FROM user WHERE create_time = #{createTime}
+</select>
+```
+
+```java
+// 传入: new Date("2024-01-01")
+// 1. 预编译 SQL: SELECT * FROM user WHERE create_time = ?
+// 2. 参数设置: ps.setTimestamp(1, ...)
+// 3. 执行效果 (示例): SELECT * FROM user WHERE create_time = '2024-01-01 00:00:00'
+```
+
+
+
+#### d. NULL 值处理
+
+MyBatis 会正确处理 `null` 值
+
+```xml
+<select id="findByEmail" resultType="User">
+    SELECT * FROM user WHERE email = #{email}
+</select>
+```
+
+```java
+// 传入: null
+// 1. 预编译 SQL: SELECT * FROM user WHERE email = ?
+// 2. 参数设置: ps.setNull(1, JDBCType.VARCHAR) (需要知道类型)
+// 3. 最终数据库执行的效果是: SELECT * FROM user WHERE email IS NULL
+```
+
+
+
+### 1.5 高级用法
+
+`#{}` 占位符还支持更详细的配置，语法为 `#{property, javaType=Type, jdbcType=Type, typeHandler=Handler}`
+
+#### a. 指定 JDBC 类型
+
+**使用场景：** 
+
+- 在某些情况下，特别是当参数值为 `null` 时（如 `#{email}`），MyBatis 可能无法推断出该 `null` 应该对应数据库的哪种列类型（例如 `VARCHAR`, `INTEGER` 还是 `TIMESTAMP`）
+
+  此时 JDBC 驱动调用 `ps.setNull(index, ...)` 时会出错
+
+   **解决方案：** 通过 `jdbcType` 显式告知 MyBatis 该参数对应的数据库类型
+
+```xml
+<insert id="insert">
+    INSERT INTO user (name, age, email, status) 
+    VALUES (
+        #{name, jdbcType=VARCHAR},
+        #{age, jdbcType=INTEGER},
+        <!-- 即使 email 为 null，也告诉 JDBC 这是一个 VARCHAR -->
+        #{email, jdbcType=VARCHAR},
+        #{status, jdbcType=VARCHAR}
+    )
+</insert>
+```
+
+
+
+#### b. 指定类型处理器
+
+**使用场景：** 
+
+- 当 Java 类型和 JDBC 类型之间的转换需要自定义逻辑时
+
+  例如，Java 中的 `enum` 类型（如 `UserStatus.ACTIVE`）需要被存储为数据库中的 `Integer`（如 `1`）
+
+  **解决方案：** 使用 `typeHandler` 指定一个自定义的类型处理器来完成这种双向转换
+
+```xml
+<select id="findById" resultType="User">
+    SELECT * FROM user 
+    <!-- 使用 MyBatis 内置的 Long 类型处理器 -->
+    WHERE id = #{id, typeHandler=org.apache.ibatis.type.LongTypeHandler}
+</select>
+```
+
+
+
+#### c. 集合参数
+
+`#{}` 本身不能直接处理集合（如 `List`），但可以在 `<foreach>` 标签内部循环使用 `#{}`，将集合动态构建为 `IN (?, ?, ...)` 这样的预编译查询
+
+```xml
+<select id="findByIds" resultType="User">
+    SELECT * FROM user 
+    WHERE id IN
+    <!-- 
+      collection="ids" 对应 @Param("ids") 定义的 List
+      item="id" 是循环中当前元素的变量名
+      open/close/separator 用于拼接 SQL
+    -->
+    <foreach collection="ids" item="id" open="(" separator="," close=")">
+        <!-- 每次循环都生成一个 ? 占位符 -->
+        #{id}
+    </foreach>
+</select>
+```
+
+```java
+List<User> findByIds(@Param("ids") List<Long> ids);
+
+// 调用
+List<Long> ids = Arrays.asList(1L, 2L, 3L);
+List<User> users = userMapper.findByIds(ids);
+
+// 1. MyBatis 生成 SQL: 
+// SELECT * FROM user WHERE id IN (?, ?, ?)
+// 2. MyBatis 设置参数:
+// ps.setLong(1, 1L); ps.setLong(2, 2L); ps.setLong(3, 3L);
+// 3. 最终执行效果: 
+// SELECT * FROM user WHERE id IN (1, 2, 3)
+```
+
+
+
+
+
+### 1.6 防止 SQL 注入
+
+`#{}` 的防注入原理在于**参数绑定**。传入的数据被 JDBC 驱动严格限制为“值”，而不是“SQL指令”的一部分
+
+```xml
+<select id="findByName" resultType="User">
+    SELECT * FROM user WHERE name = #{name}
+</select>
+```
+
+
+
+**示例：传入恶意参数**
+
+```java
+// 攻击者试图通过输入恶意字符串来绕过查询
+String maliciousInput = "Tom' OR '1'='1";
+User user = userMapper.findByName(maliciousInput);
+```
+
+**执行分析：**
+
+1. **预编译 SQL：**
+
+   -  `SELECT * FROM user WHERE name = ?`
+
+2. **参数绑定：** 
+
+   - MyBatis (通过 JDBC) 将 `maliciousInput` **整个字符串** `"Tom' OR '1'='1"` 作为**一个单独的值**绑定到 `?` 占位符上
+
+3. **最终执行 (效果)：** 
+
+   - `SELECT * FROM user WHERE name = 'Tom'' OR ''1''=''1'` 
+
+     > *(注意：MyBatis 和 JDBC 驱动确保了字符串内部的单引号 `_'_` 被正确转义为 `_''_`)*
+
+**结果：** 
+
+- 数据库会去查找一个名字*恰好*为 `Tom' OR '1'='1` 的用户（这基本不可能存在），而不是执行 `OR '1'='1` 这个“或”逻辑判断
+
+  恶意代码失效，SQL 注入被成功阻止
+
+
+
+## 2. `${}` -  字符串替换 (慎用)
+
+### 2.1 基本概念
+
+`${}` 的工作方式是**直接的字符串替换**或**字符串拼接**。它会将传入的参数**原样**拼接到 SQL 语句中，使其成为 SQL 指令的一部分
+
+- **核心原理：** 
+
+  - 字符串拼接
+
+    MyBatis 在解析 SQL 时，会直接用 `${}` 对应的参数值替换占位符
+
+- **工作机制：** 
+
+  - 这种方式在功能上等同于使用 JDBC 的 `Statement` 对象执行 SQL，而不是 `PreparedStatement`
+
+- **安全性：** ❌ **存在严重的 SQL 注入风险**
+
+  - 因为数据库会**解析并执行**拼接了参数后的完整 SQL 字符串
+
+    如果参数中包含恶意的 SQL 指令（如 `OR '1'='1'` 或 `DROP TABLE`），这些指令也会被数据库执行
+
+- **性能：** ⚠️ **可能导致性能下降**
+
+  - 因为每次传入的参数不同（例如 `ORDER BY name` 和 `ORDER BY id`），MyBatis 生成的最终 SQL 字符串也不同
+
+    数据库无法重用之前编译好的执行计划，每次都需要对新的 SQL 语句进行完整的解析和编译
+
+- **数据类型：** **不进行 JDBC 类型转换，也不会自动添加引号**
+
+  - 传入 `"Tom"`，SQL 拼接为 `... WHERE name = Tom` (这会导致 SQL 语法错误)
+  - 传入 `"user"`，SQL 拼接为 `... FROM user` (这正是它用于动态表名的原因)
+
+
+
+### 2.2 工作原理
+
+`${}` 的执行过程展示了 SQL 的动态拼接特性：
+
+```XML
+<select id="selectFromTable" resultType="Map">
+    SELECT * FROM ${tableName}
+</select>
+```
+
+**执行过程（MyBatis 内部逻辑）：**
+
+```JAVA
+// 假设传入的 tableName 为 "user"
+
+// 1. MyBatis 直接进行字符串拼接
+String sql = "SELECT * FROM " + "user"; 
+// 最终 SQL 为: "SELECT * FROM user"
+
+// 2. 创建 Statement（非 PreparedStatement）
+Statement stmt = connection.createStatement();
+
+// 3. 执行查询
+ResultSet rs = stmt.executeQuery(sql);
+```
+
+**实际发送到数据库的 SQL：**
+
+```SQL
+-- 传入参数 tableName = "user"
+-- MyBatis 拼接后的 SQL:
+SELECT * FROM user
+
+-- 传入参数 tableName = "order"
+-- MyBatis 拼接后的 SQL:
+SELECT * FROM order
+```
+
+**对比 `#{}`：**
+
+​	 `#{}` 发送的是 `PREPARE "SELECT * FROM user WHERE id = ?"` 和 `EXECUTE (using 1L)`
+
+​	`${}` 发送的是 `EXECUTE "SELECT * FROM user"`
+
+
+
+
+
+### 2.3 合法使用场景
+
+**为什么必须使用 `${}`？**
+
+`#{}`（即 `?` 占位符）在 SQL 中只能用于替换**值**，例如 `WHERE` 条件中的值、`INSERT` 语句中的数据等
+
+`#{}` **不能**用于替换 SQL 关键字、表名、列名等**SQL 结构	**
+
+- 错误示例: `<select ...> SELECT * FROM #{tableName} </select>`
+- `#{}` 会将其解析为: `SELECT * FROM ?`
+- 执行时会试图设置为: `SELECT * FROM 'user'`
+- 这会导致 SQL 语法错误，因为表名不能是字符串字面量。
+
+因此，当需要动态改变 SQL 结构本身时，必须（且只能）使用 `${}`
+
+
+
+
+
+#### a. 动态表名
+
+`${}` 最经典的用法是根据参数查询不同的表
+
+```XML
+<select id="selectFromTable" resultType="Map">
+    SELECT * FROM ${tableName}
+</select>
+```
+
+```JAVA
+public interface DynamicMapper {
+    List<Map<String, Object>> selectFromTable(@Param("tableName") String tableName);
+}
+```
+
+```JAVA
+// 使用
+List<Map<String, Object>> users = dynamicMapper.selectFromTable("user");
+// SQL: SELECT * FROM user
+
+List<Map<String, Object>> orders = dynamicMapper.selectFromTable("order");
+// SQL: SELECT * FROM order
+```
+
+
+
+#### b. 动态列名
+
+`${}` 可用于动态指定查询的列。
+
+```XML
+<select id="selectColumn" resultType="String">
+    SELECT ${columnName} FROM user WHERE id = #{id}
+</select>
+```
+
+```JAVA
+// **最佳实践：**
+// 注意，WHERE 条件中的值 `id` 仍然使用 `#{id}`。
+// 规则：仅在必要时（如列名）使用 `${}`，在所有可以的地方（如值）都坚持使用 `#{}`。
+
+String name = mapper.selectColumn("name", 1L);
+// SQL: SELECT name FROM user WHERE id = ? (执行时 id = 1)
+
+String email = mapper.selectColumn("email", 1L);
+// SQL: SELECT email FROM user WHERE id = ? (执行时 id = 1)
+```
+
+
+
+#### c. 动态排序（ORDER BY）
+
+`${}` 可用于动态指定排序字段和排序方式。这是 SQL 注入的高发区，必须严格校验
+
+```XML
+<select id="findAllWithOrder" resultType="User">
+    SELECT * FROM user 
+    ORDER BY ${orderBy}
+</select>
+```
+
+```JAVA
+List<User> users1 = mapper.findAllWithOrder("create_time DESC");
+// SQL: SELECT * FROM user ORDER BY create_time DESC
+
+List<User> users2 = mapper.findAllWithOrder("name ASC");
+// SQL: SELECT * FROM user ORDER BY name ASC
+```
+
+**⚠️ 注意：**
+
+`${}` 最大的风险在于它不区分数据和指令,
+
+如果 `orderBy` 参数直接由前端用户传入，攻击者可能会传入 `age; DROP TABLE user; --`
+
+因此，必须在 Java 代码中进行**白名单验证**
+
+```java
+// ✅ 安全的做法：白名单验证
+public List<User> findAllWithOrder(String orderBy) {
+    // 只允许特定的、已知的排序字段和方向
+    Set<String> allowedColumns = Set.of(
+        "id", "name", "age", "create_time", 
+        "id DESC", "name ASC", "age DESC",
+        "create_time DESC"
+    );
+    
+    // 只有在白名单内的值才允许拼接到 SQL 中
+    if (!allowedColumns.contains(orderBy)) {
+        // 对于无效输入，抛出异常或使用默认排序
+        throw new IllegalArgumentException("Invalid order by: " + orderBy);
+    }
+    
+    return mapper.findAllWithOrder(orderBy);
+}
+```
+
+
+
+#### d. 动态 GROUP BY
+
+```xml
+<select id="groupBy" resultType="Map">
+    SELECT ${groupColumn}, COUNT(*) as count
+    FROM user
+    GROUP BY ${groupColumn}
+</select>
+List<Map> result = mapper.groupBy("age");
+// SQL: SELECT age, COUNT(*) as count FROM user GROUP BY age
+```
+
+
+
+### 2.4 危险示例（SQL 注入）
+
+`#{}` 和 `${}` 的核心区别在于：`#{}` 告诉数据库“这是一段数据”，而 `${}` 告诉数据库“这是 SQL 指令的一部分”
+
+当本应是“数据”的地方（如 `WHERE` 条件值）被错误地使用了 `${}`，SQL 注入就发生了
+
+#### 示例 1：用户名查询（危险）
+
+这个例子展示了攻击者如何**闭合字符串**并**添加新的 SQL 逻辑**
+
+```xml
+<!-- ❌ 危险的写法：WHERE 条件值使用了 ${} -->
+<select id="findByNameDangerous" resultType="User">
+    <!-- 
+      错误：这里本应是 #{name}。
+      注意：为了让 SQL "成功"，攻击者还需要自己处理引号。
+    -->
+    SELECT * FROM user WHERE name = '${name}'
+</select>
+```
+
+**正常使用：**
+
+```java
+// 传入: "Tom"
+User user = mapper.findByNameDangerous("Tom");
+// 拼接 SQL: SELECT * FROM user WHERE name = 'Tom'
+// 结果：正确
+```
+
+**🚨 SQL 注入攻击：**
+
+```java
+// 攻击者传入一个精心构造的字符串
+String maliciousInput = "Tom' OR '1'='1";
+User user = mapper.findByNameDangerous(maliciousInput);
+
+// 1. MyBatis 进行字符串拼接
+// SQL: SELECT * FROM user WHERE name = 'Tom' OR '1'='1'
+//                                     ^-- 闭合 'Tom'
+//                                           ^-- 注入新逻辑
+
+// 2. 数据库执行
+// '1'='1' 永远为 true，WHERE 条件变为 true
+// 结果：查询返回了 `user` 表中的**所有**用户！
+```
+
+
+
+#### 示例 2：删除操作（极度危险）
+
+这个例子展示了 `${}` **不自动添加引号**的特性所带来的风险
+
+```xml
+<!-- ❌ 极度危险：WHERE 条件值使用了 ${} 且未加引号 -->
+<delete id="deleteByIdDangerous">
+    DELETE FROM user WHERE id = ${id}
+</delete>
+```
+
+
+
+**🚨 SQL 注入攻击：**
+
+```java
+// 攻击者传入一个 SQL 逻辑片段
+String maliciousInput = "1 OR 1=1";
+mapper.deleteByIdDangerous(maliciousInput);
+
+// 1. MyBatis 进行字符串拼接
+// SQL: DELETE FROM user WHERE id = 1 OR 1=1
+
+// 2. 数据库执行
+// `OR 1=1` 导致 WHERE 对所有行都为 true
+// 结果：删除 `user` 表中的**所有数据**！！！
+```
+
+
+
+#### 示例 3：获取敏感信息（联合查询）
+
+这个例子展示了攻击者如何使用 `UNION` 窃取其他表的数据
+
+```xml
+<!-- ❌ 危险 -->
+<select id="queryDangerous" resultType="Map">
+    SELECT * FROM user WHERE id = ${id}
+</select>
+```
+
+**🚨 SQL 注入攻击：**
+
+```java
+// 攻击者猜测存在一个 `admin` 表
+String maliciousInput = "1 UNION SELECT username, password, null, null FROM admin";
+mapper.queryDangerous(maliciousInput);
+
+// 1. MyBatis 进行字符串拼接
+// SQL: SELECT * FROM user WHERE id = 1 UNION SELECT username, password, null, null FROM admin
+
+// 2. 数据库执行
+// 结果：查询结果中包含了 `admin` 表的用户名和密码，导致数据泄露
+```
+
+
+
+### 2.5 `${}` 使用规则与安全措施
+
+#### ✅ 允许使用的场景（SQL 结构）
+
+1. **动态表名** (`FROM ${tableName}`)
+2. **动态列名** (`SELECT ${columnName}`)
+3. **动态排序** (`ORDER BY ${orderBy}`)
+4. **动态分组** (`GROUP BY ${groupColumn}`)
+
+
+
+#### ❌ 绝对禁止使用的场景（SQL 数据）
+
+1. **WHERE 条件值** (必须用 `#{}`)
+2. **INSERT 值** (必须用 `#{}`)
+3. **UPDATE 值** (必须用 `#{}`)
+4. **任何可能包含用户输入的地方**
+
+
+
+#### ⚠️ 强制安全措施（在 Java 中校验）
+
+既然 `${}` 只是简单的字符串拼接，那么**安全防范的责任就完全转移到了 Java 代码层面**
+
+绝对不允许将未经验证的参数（尤其是来自用户HTTP请求的参数）直接传递给 `${}`
+
+**核心思想：** 不要让用户 *输入* SQL，而是让用户 *选择* SQL
+
+
+
+**方法 1：白名单验证（最推荐）**
+
+在 Java 代码中定义一个允许传入的值的 `Set`（白名单），只允许白名单中的值通过
+
+```java
+// 适用于动态表名或动态排序
+Set<String> ALLOWED_TABLES = Set.of("user", "order", "product");
+Set<String> ALLOWED_ORDER_BY = Set.of("id", "name ASC", "create_time DESC");
+
+public List<Map> selectFromTable(String tableName) {
+    // 只有在白名单内的值才允许拼接到 SQL
+    if (!ALLOWED_TABLES.contains(tableName)) {
+        throw new IllegalArgumentException("Invalid table name: " + tableName);
+    }
+    return mapper.selectFromTable(tableName);
+}
+```
+
+
+
+**方法 2：枚举限制（最严格）**
+
+使用枚举来定义所有合法的选项，调用方只能传入枚举实例。
+
+```java
+// 适用于动态列名
+public enum UserColumn {
+    ID("id"),
+    NAME("name"),
+    AGE("age");
+    
+    private final String columnName;
+    
+    UserColumn(String columnName) { this.columnName = columnName; }
+    
+    public String getColumnName() { return columnName; }
+}
+```
+
+```java
+// Mapper 接口
+// 调用者必须传入一个 UserColumn 枚举，而不是任意 String
+String selectColumn(UserColumn column, Long id);
+```
+
+```xml
+// XML
+<select id="selectColumn" resultType="String">
+    <!-- 
+      MyBatis 会自动调用 column.getColumnName() 
+      (或 column.name()，取决于你的 TypeHandler 配置)
+    -->
+    SELECT ${columnName} FROM user WHERE id = #{id}
+</select>
+```
+
+
+
+**方法 3：正则表达式验证（次选）**
+
+如果白名单不适用（例如排序字段过多），可以使用正则表达式进行格式校验，确保参数中不含恶意字符
+
+```java
+// 仅允许字母、数字、下划线，以及可选的 ASC/DESC
+public List<User> orderBy(String column) {
+    if (!column.matches("^[a-zA-Z0-9_]+( (ASC|DESC))?$")) {
+        throw new IllegalArgumentException("Invalid column format");
+    }
+    return mapper.findAllWithOrder(column);
+}
+```
+
+
+
+## 3. `#{}` 与 `${}` 对比
+
+### 3.1 核心区别
+
+| 特性          | `#{}` (预编译占位符)               | `${}` (字符串拼接)                            |
+| ------------- | ---------------------------------- | --------------------------------------------- |
+| **底层实现**  | `PreparedStatement`                | `Statement`                                   |
+| **SQL 处理**  | 预编译，使用 `?` 占位符            | 字符串拼接，直接替换                          |
+| **参数类型**  | 作为**数据值 (Value)** 处理        | 作为**SQL结构 (Structure)** 或 **片段** 处理  |
+| **引号处理**  | **自动添加** (仅对字符串类型)      | **绝不添加** (原样拼接)                       |
+| **SQL 注入**  | ✅ **防止** (通过参数绑定实现)      | ❌ **有风险** (参数会作为 SQL 被执行)          |
+| **性能**      | ✅ **更好** (SQL执行计划可被缓存)   | ⚠️ **较差** (参数不同则 SQL 不同，需重新解析)  |
+| **类型转换**  | ✅ **自动** (TypeHandler 负责转换)  | ❌ **无** (纯文本替换)                         |
+| **NULL 处理** | ✅ **自动** (正确转为 `IS NULL`)    | ⚠️ **易出错** (可能转为 `'null'` 字符串或空值) |
+| **使用频率**  | 99% (绝大多数场景)                 | 1% (特定动态场景)                             |
+| **适用场景**  | `WHERE` / `INSERT` / `UPDATE` 的值 | `表名` / `列名` / `ORDER BY` / `GROUP BY`     |
+
+
+
+### 3.2 实际对比示例
+
+#### 示例 1：字符串参数
+
+```xml
+<!-- ✅ 推荐：#{} -->
+<select id="test1" resultType="User">
+    SELECT * FROM user WHERE name = #{name}
+</select>
+<!-- 传入: "Tom" -->
+<!-- 1. SQL 模板: SELECT * FROM user WHERE name = ? -->
+<!-- 2. 执行效果: SELECT * FROM user WHERE name = 'Tom' -->
+<!-- 安全，自动处理引号和转义 -->
+
+<!-- ❌ 危险：${} -->
+<select id="test2" resultType="User">
+    SELECT * FROM user WHERE name = '${name}'
+</select>
+<!-- 传入: "Tom" -->
+<!-- 1. SQL 拼接: SELECT * FROM user WHERE name = 'Tom' -->
+<!-- 2. 结果：看似正常，但... -->
+<!-- 传入: "Tom' OR '1'='1" -->
+<!-- 1. SQL 拼接: SELECT * FROM user WHERE name = 'Tom' OR '1'='1' -->
+<!-- 2. 结果：SQL 注入！ -->
+```
+
+
+
+#### 示例 2：数字参数
+
+```xml
+<!-- ✅ 推荐：#{} -->
+<select id="test3" resultType="User">
+    SELECT * FROM user WHERE age = #{age}
+</select>
+<!-- 传入: 25 -->
+<!-- 1. SQL 模板: SELECT * FROM user WHERE age = ? -->
+<!-- 2. 执行效果: SELECT * FROM user WHERE age = 25 -->
+
+<!-- ❌ 危险：${} -->
+<select id="test4" resultType="User">
+    SELECT * FROM user WHERE age = ${age}
+</select>
+<!-- 传入: 25 -->
+<!-- 1. SQL 拼接: SELECT * FROM user WHERE age = 25 -->
+<!-- 2. 结果：看似正常，但... -->
+<!-- 传入: "25 OR 1=1" (作为字符串传入) -->
+<!-- 1. SQL 拼接: SELECT * FROM user WHERE age = 25 OR 1=1 -->
+<!-- 2. 结果：SQL 注入！ -->
+```
+
+
+
+#### 示例 3：NULL 值
+
+这是两者行为差异最明显的场景之一
+
+```xml
+<!-- ✅ 推荐：#{} -->
+<select id="test5" resultType="User">
+    SELECT * FROM user WHERE email = #{email}
+</select>
+<!-- 传入: null -->
+<!-- 1. SQL 模板: SELECT * FROM user WHERE email = ? -->
+<!-- 2. 参数设置: ps.setNull(1, JDBCType.VARCHAR) -->
+<!-- 3. 执行效果: SELECT * FROM user WHERE email IS NULL -->
+<!-- 结果：正确，查询 email 为 NULL 的数据 -->
+
+<!-- ❌ 错误：${} -->
+<select id="test6" resultType="User">
+    SELECT * FROM user WHERE email = '${email}'
+</select>
+<!-- 传入: null -->
+<!-- 1. SQL 拼接: SELECT * FROM user WHERE email = 'null' -->
+<!-- 
+     (注：具体行为取决于 null 如何被转为字符串，
+      如果是 String.valueOf(null)，则变为 'null' 字符串)
+-->
+<!-- 2. 结果：错误！查询的是 email = 字符串'null' 的数据，而非 IS NULL -->
+```
+
+
+
+
+
+## 4. 完整实战示例
+
+演示如何在实际项目中结合使用 `#{}` 和 `${}`，并遵循最佳安全实践
+
+### 4.1 用户管理系统 (Mapper 示例)
+
+**Mapper 接口**
+
+```java
+public interface UserMapper {
+    
+    // ✅ 正确：使用 #{} 传递所有数据值
+    User findById(@Param("id") Long id);
+    
+    List<User> findByName(@Param("name") String name);
+    
+    int insert(User user);
+    
+    int update(User user);
+    
+    int deleteById(@Param("id") Long id);
+    
+    // ✅ 正确：混合使用
+    // 动态表名 (SQL结构) 用 ${}
+    // WHERE 条件值 (数据) 用 #{}
+    List<Map<String, Object>> selectFromTable(
+       @Param("tableName") String tableName,
+       @Param("id") Long id
+   );
+    
+    // ✅ 正确：动态排序 (SQL结构) 用 ${}
+    // 注意：Service 层必须对 orderBy 参数进行安全校验
+    List<User> findAllWithOrder(@Param("orderBy") String orderBy);
+}
+```
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "[http://mybatis.org/dtd/mybatis-3-mapper.dtd](http://mybatis.org/dtd/mybatis-3-mapper.dtd)">
+<mapper namespace="com.example.mapper.UserMapper">
+
+    <!-- ✅ 基本查询：WHERE 条件值，使用 #{} -->
+    <select id="findById" resultType="User">
+        SELECT * FROM user WHERE id = #{id}
+    </select>
+    
+    <!-- ✅ 字符串查询：WHERE 条件值，使用 #{} -->
+    <select id="findByName" resultType="User">
+        SELECT * FROM user WHERE name = #{name}
+    </select>
+    
+    <!-- ✅ 插入：所有插入的值，使用 #{} -->
+    <insert id="insert" parameterType="User" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO user (name, age, email, create_time)
+        VALUES (#{name}, #{age}, #{email}, #{createTime})
+    </insert>
+    
+    <!-- ✅ 更新：SET 和 WHERE 中的值，均使用 #{} -->
+    <update id="update" parameterType="User">
+        UPDATE user
+        SET name = #{name},
+            age = #{age},
+            email = #{email}
+        WHERE id = #{id}
+    </update>
+    
+    <!-- ✅ 删除：WHERE 条件值，使用 #{} -->
+    <delete id="deleteById">
+        DELETE FROM user WHERE id = #{id}
+    </delete>
+    
+    <!-- ✅ 混合使用：${tableName} 拼接表名，#{id} 绑定参数值 -->
+    <select id="selectFromTable" resultType="Map">
+        SELECT * FROM ${tableName} WHERE id = #{id}
+    </select>
+    
+    <!-- ✅ 动态排序：${orderBy} 拼接排序逻辑 -->
+    <select id="findAllWithOrder" resultType="User">
+        SELECT * FROM user
+        ORDER BY ${orderBy}
+    </select>
+    
+</mapper>
+```
+
+
+
+### 4.2 复杂查询示例（动态 SQL）
+
+在动态 SQL (如 `<if>`) 中，规则同样适用：**数据值永远用 `#{}`**，**SQL 结构（如排序）用 `${}`**
+
+```xml
+<!-- 动态 SQL 综合示例 -->
+<select id="findByConditions" resultType="User">
+    SELECT * FROM user
+    <where>
+        <!-- ✅ 动态 WHERE 条件值，必须用 #{} -->
+        <if test="name != null">
+            <!-- 
+               模糊查询。注意：CONCAT 是数据库函数，
+               #{name} 仍作为参数传入，是安全的。
+            -->
+            AND name LIKE CONCAT('%', #{name}, '%')
+        </if>
+        <if test="minAge != null">
+            AND age >= #{minAge}
+        </if>
+        <if test="maxAge != null">
+            AND age &lt;= #{maxAge}
+        </if>
+        <if test="email != null">
+            AND email = #{email}
+        </if>
+    </where>
+    <!-- ✅ 动态排序列，必须用 ${} -->
+    <if test="orderBy != null">
+        ORDER BY ${orderBy}
+    </if>
+</select>
+```
+
+
+
+### 4.3 分页查询（综合安全示例）
+
+分页查询是 `#{}` 和 `${}` 混合使用的完美示例
+
+```xml
+<select id="findByPage" resultType="User">
+    SELECT * FROM user
+    <where>
+        <if test="name != null">
+            AND name LIKE CONCAT('%', #{name}, '%')
+        </if>
+    </where>
+    <!-- ✅ 排序：SQL 结构，用 ${} -->
+    ORDER BY ${orderBy}
+    <!-- ✅ 分页：数据值，用 #{} -->
+    LIMIT #{offset}, #{pageSize}
+</select>
+```
+
+
+
+**Service 层的安全处理**
+
+`findByPage` 方法接收了来自用户的 `orderBy` 参数，**必须**在 Java 代码中对其进行校验，才能传递给 `${}`
+
+```java
+public Page<User> findByPage(String name, String orderBy, int page, int pageSize) {
+    
+    // ⚠️ 强制安全校验：在 ${orderBy} 被使用前，必须校验其合法性
+    if (!isValidOrderBy(orderBy)) {
+        orderBy = "id DESC"; // 如果校验失败，使用一个安全的默认值
+    }
+    
+    // 计算分页参数
+    int offset = (page - 1) * pageSize;
+    
+    // 此时 orderBy 是"安全"的, name/offset/pageSize 会被 #{} 处理
+    List<User> users = mapper.findByPage(name, orderBy, offset, pageSize);
+    return new Page<>(users, page, pageSize);
+}
+```
+
+```java
+/**
+ * 严格的白名单或格式校验
+ */
+private boolean isValidOrderBy(String orderBy) {
+    if (orderBy == null || orderBy.isEmpty()) {
+        return false;
+    }
+    // 仅允许 "字段名" 或 "字段名 ASC/DESC" 格式
+    // 并且字段名只能是字母、数字、下划线
+    return orderBy.matches("^[a-zA-Z0-9_]+( (ASC|DESC))?$");
+}
+```
+
+
+
+## 5. 最佳实践总结
+
+### 5.1 使用原则
+
+1. **坚持默认使用 `#{}` (首选原则)** 
+
+   - 在任何需要传递**数据值 (Value)** 的地方（`WHERE`, `INSERT`, `UPDATE`），**必须**使用 `#{}`
+
+     它能确保 SQL 注入安全、提供最佳性能（预编译缓存）并正确处理数据类型（如自动加引号、`null` 值处理）
+
+2. **仅在必要时使用 `${}` (例外原则)** 
+
+   - 仅在 `#{}` 无法工作的地方（即需要动态改变 **SQL 结构 (Structure)**），才应考虑使用 `${}`
+   - 合法场景：`ORDER BY`、`GROUP BY`、动态 `表名`、动态 `列名`
+
+3. **严格校验 `${}` 参数 (安全原则)** 
+
+   - 一旦使用了 `${}`，安全防范的责任就**完全转移到了 Java 代码层面**
+
+     **绝对禁止**将任何未经验证的、来自用户（前端）的参数直接传递给 `${}`
+
+     **必须**在 Java 中使用**白名单、枚举或严格的正则表达式**来验证参数，确保其不包含任何恶意 SQL
+
+4. **混合使用，明确分工** 
+
+   - 在一个同时包含动态结构和动态值的复杂 SQL 中（如动态排序和分页），`#{}` 和 `${}` 必须协同工作
+     - `ORDER BY ${orderBy}` (结构用 `${}`)
+     - `LIMIT #{offset}, #{pageSize}` (值用 `#{}`)
+
+
+
+### 5.2 常见错误
+
+#### 错误 1：在 `WHERE` 条件值上误用 `${}`
+
+这是最危险的错误，将直接导致 SQL 注入
+
+```xml
+<!-- ❌ 错误 (有 SQL 注入风险) -->
+<select id="findByName" resultType="User">
+    SELECT * FROM user WHERE name = '${name}'
+</select>
+```
+
+```xml
+<!-- ✅ 正确 (安全) -->
+<select id="findByName" resultType="User">
+    SELECT * FROM user WHERE name = #{name}
+</select>
+```
+
+
+
+#### 错误 2：`WHERE` 中使用 `${}` 且忘记加引号
+
+即使用 `${}`，如果不了解其“原样拼接”的原理，也会导致语法错误
+
+```xml
+<!-- ❌ 错误 (SQL 语法错误) -->
+<select id="test" resultType="User">
+    SELECT * FROM user WHERE name = ${name}
+</select>
+<!-- 传入 "Tom" -->
+<!-- 拼接 SQL: SELECT * FROM user WHERE name = Tom -->
+<!-- 结果：数据库报错，"Tom" 不是一个有效的列名或标识符 -->
+```
+
+```xml
+<!-- ✅ 正确方式 (安全且正确) -->
+<select id="test" resultType="User">
+    SELECT * FROM user WHERE name = #{name}
+</select>
+```
+
+
+
+#### 错误 3：在 `ORDER BY` 上误用 `#{}`
+
+这是反向的常见错误。`#{}` 会将 SQL 结构（列名）当作字符串值处理
+
+```xml
+<!-- ❌ 错误 (排序失效) -->
+<select id="test" resultType="User">
+    SELECT * FROM user ORDER BY #{orderBy}
+</select>
+<!-- 
+  传入: "name DESC"
+  SQL 模板: SELECT * FROM user ORDER BY ?
+  执行效果: SELECT * FROM user ORDER BY 'name DESC'
+-->
+<!-- 
+  结果：数据库尝试按一个常量字符串 'name DESC' 来排序，
+  这对所有行都是相同的值，因此排序无效。
+-->
+```
+
+```xml
+<!-- ✅ 正确 (配合 Java 校验) -->
+<select id="test" resultType="User">
+    SELECT * FROM user ORDER BY ${orderBy}
+</select>
+<!-- 
+  传入: "name DESC"
+  拼接 SQL: SELECT * FROM user ORDER BY name DESC
+  结果：正确排序（前提是 Java 层已校验 "name DESC" 是安全的）
+-->
+```
+
+
 
 
 
