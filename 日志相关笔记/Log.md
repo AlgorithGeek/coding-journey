@@ -15,7 +15,7 @@ Java开发崇尚“面向门面编程”，即代码依赖于SLF4J，而具体�
 
 # 《日志共和国编年史》
 
-为了更好地理解这些框架之间的关系，这里通过一个故事来回顾这段波澜壮阔的历史
+> 为了更好地理解这些框架之间的关系，这里编写了一个映射现实的小说故事来回顾这段波澜壮阔的历史
 
 
 
@@ -61,11 +61,11 @@ Log4j 1虽好，但它将“设计图纸”（API）和“机器本身”（实�
 >     ```java
 >     // 注意这里的 import 语句
 >     import org.apache.log4j.Logger;
->         
+>             
 >     public class MyOldService {
 >         // 这里直接从 Log4j 的类获取 Logger 实例
 >         private static final Logger logger = Logger.getLogger(MyOldService.class);
->         
+>             
 >         public void doSomething() {
 >             // 调用 Log4j Logger 的方法
 >             logger.info("这是一个使用 Log4j 1 的日志");
@@ -91,11 +91,11 @@ Log4j 1虽好，但它将“设计图纸”（API）和“机器本身”（实�
 >         // 注意这里的 import 语句，它来自 SLF4J 标准
 >         import org.slf4j.Logger;
 >         import org.slf4j.LoggerFactory;
->                 
+>                         
 >         public class MyNewService {
 >             // 通过 SLF4J 这个“国家标准”的工厂来获取 Logger 实例
 >             private static final Logger logger = LoggerFactory.getLogger(MyNewService.class);
->                 
+>                         
 >             public void doSomething() {
 >                 // 调用 SLF4J Logger 的方法
 >                 logger.info("这是一个使用 SLF4J 标准的日志");
