@@ -2112,7 +2112,9 @@ public class RedisConfig {
             ObjectMapper.DefaultTyping.NON_FINAL,
             JsonTypeInfo.As.PROPERTY
         );
-        
+        // 注册 Java 8 时间模块 (必备)
+        // 支持 LocalDate, LocalDateTime 等
+        serializer.setObjectMapper(mapper);
         serializer.setObjectMapper(mapper);
 
         // 3. 设置 Key/Value/HashKey/HashValue 的序列化器
@@ -2157,6 +2159,8 @@ public class RedisConfig {
         // 这个序列化器在内部已经配置好了, 会自动添加 "@class" 属性
         GenericJackson2JsonRedisSerializer serializer = 
             new GenericJackson2JsonRedisSerializer();
+        
+        //内部已经默认注册了 Java 8 时间模块
 
         // 2. 设置序列化器
         template.setKeySerializer(new StringRedisSerializer());

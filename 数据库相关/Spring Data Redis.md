@@ -662,6 +662,9 @@ public class RedisConfig {
                 ObjectMapper.DefaultTyping.NON_FINAL,
                 JsonTypeInfo.As.PROPERTY
         );
+        // 注册 Java 8 时间模块 (必备)
+        // 支持 LocalDate, LocalDateTime 等
+        jsonSerializer.setObjectMapper(om);
         jsonSerializer.setObjectMapper(om);
         
         // --- 2. 设置序列化器到 Template ---
@@ -708,6 +711,8 @@ public class RedisConfig {
         GenericJackson2JsonRedisSerializer serializer = 
             new GenericJackson2JsonRedisSerializer();
 
+        //内部已经默认注册了 Java 8 时间模块
+        
         // 2. 设置序列化器
         template.setKeySerializer(new StringRedisSerializer());
         template.setValueSerializer(serializer);
@@ -822,6 +827,119 @@ public class UserService {
 | ✅ JSON格式，可读性好       | ⚠️ `@class` 字段略增体积 |
 | ✅ 跨语言通用               |                         |
 | ✅ 类型安全，无需手动转换   |                         |
+
+
+
+#### 5.6 关于配置的其它问题
+
+###### a1. 问题：LocalDateTime 序列化失败
+
+在使用方案三（自定义 `RedisTemplate`）时，如果 POJO 对象中包含 `java.time.LocalDateTime`、`LocalDate` 或 `LocalTime` 等 Java 8 日期时间类型的字段，序列化时会抛出 `InvalidDefinitionException` 异常
+
+**错误日志示例：**
+
+```
+com.fasterxml.jackson.databind.exc.InvalidDefinitionException: 
+Java 8 date/time type `java.time.LocalDateTime` not supported by default: 
+add Module "com.fasterxml.jackson.datatype:jackson-datatype-jsr310" to enable handling
+```
+
+
+
+**问题根源：**
+
+`Jackson2JsonRedisSerializer` 依赖 `ObjectMapper` 来完成 JSON 转换
+默认情况下，`ObjectMapper` 并不知道如何将 `LocalDateTime` 这种 Java 8 特有的对象转换为 JSON 字符串（例如 "2025-11-16T14:30:00"）
+
+在 `5.2 节` 的配置示例中，我们只配置了 `activateDefaultTyping` 来解决 `@class` 类型丢失的问题，但没有配置对 Java 8 时间类型的支持
+
+```java
+// 5.2 节中的配置（缺少时间模块）
+ObjectMapper om = new ObjectMapper();
+om.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+om.activateDefaultTyping(
+    LaissezFaireSubTypeValidator.instance,
+    ObjectMapper.DefaultTyping.NON_FINAL,
+    JsonTypeInfo.As.PROPERTY
+);
+jsonSerializer.setObjectMapper(om); // <-- 此时 om 还不支持 LocalDateTime
+```
+
+
+
+###### a2. 解决方案：注册 `JavaTimeModule`
+
+Jackson 官方提供了 `jackson-datatype-jsr310` 模块来专门解决 Java 8 时间类型的序列化和反序列化问题
+
+**1. 确保依赖存在**
+
+如果你的项目（如 Spring Boot 项目）已经引入了 `spring-boot-starter-web`，那么这个依赖通常已经被间接引入。如果没有，请在 `pom.xml` 中手动添加：
+
+```xml
+<dependency>
+    <groupId>com.fasterxml.jackson.datatype</groupId>
+    <artifactId>jackson-datatype-jsr310</artifactId>
+</dependency>
+```
+
+
+
+**2. 在 `RedisConfig` 中注册模块**
+
+修改 `5.2 节` 中的 `RedisTemplate` 配置，在 `ObjectMapper` 上注册 `JavaTimeModule`
+
+**修正后的 `RedisConfig` (基于 5.2 节示例1)：**
+
+```java
+package com.example.config;
+
+// ... (其他 import) ...
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule; // 1. 导入 JavaTimeModule
+
+@Configuration
+public class RedisConfig {
+
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
+        
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+
+        StringRedisSerializer stringSerializer = new StringRedisSerializer();
+        Jackson2JsonRedisSerializer<Object> jsonSerializer = 
+            new Jackson2JsonRedisSerializer<>(Object.class);
+        
+        // --- 配置 Jackson ObjectMapper ---
+        ObjectMapper om = new ObjectMapper();
+        om.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+        
+        // 解决 @class 类型问题
+        om.activateDefaultTyping(
+            LaissezFaireSubTypeValidator.instance,
+            ObjectMapper.DefaultTyping.NON_FINAL,
+            JsonTypeInfo.As.PROPERTY
+        );
+        
+        // 2. 注册 JavaTimeModule，解决 LocalDateTime 序列化问题
+        om.registerModule(new JavaTimeModule()); 
+        
+        jsonSerializer.setObjectMapper(om);
+        
+        // --- 设置序列化器到 Template ---
+        template.setKeySerializer(stringSerializer);
+        template.setHashKeySerializer(stringSerializer);
+        template.setValueSerializer(jsonSerializer);
+        template.setHashValueSerializer(jsonSerializer);
+
+        template.afterPropertiesSet();
+        
+        return template;
+    }
+}
+```
+
+
 
 
 
@@ -3249,10 +3367,16 @@ public class SessionManager {
 
 
 
-# Spring 缓存抽象
+# Spring Cache
 
-- 这是 Spring Data Redis (SDR) 提供的最强大的功能之一
-  - 它允许开发者通过注解（Annotations）的方式，将缓存逻辑**声明式**地集成到业务代码中，而无需手动编写 `redisTemplate.get()` 或 `set()` 这样重复的“样板代码”
+> Spring Data Redis (SDR) **不是** Spring Cache的**发明者**，而是**“实现者”**
+
+- 这是 **Spring Framework**（`spring-context` 模块）提供的最强大的功能之一，它定义了一套**缓存抽象 API 和规范**
+  - 它允许开发者通过 **统一的注解**（如 `@Cacheable`, `@CachePut`），将缓存逻辑 **声明式** 地集成到业务代码中，而无需手动编写 `redisTemplate.get()` 或 `set()` 这样重复的“样板代码”
+  
+    SDR 提供了 `RedisCacheManager`，它 **实现** 了 Spring Framework 定义的 `CacheManager` **接口**，
+    这个 `RedisCacheManager` 内部封装了 `RedisTemplate`，负责执行**实际**的 Redis GET/SET/DEL 操作
+  
     - 这种方式极大地简化了缓存的使用，并使业务代码保持简洁，专注于业务逻辑本身
 
 
@@ -3281,10 +3405,19 @@ public class SessionManager {
 
 
 
-## 4.2 `@Cacheable`
+## 4.2 `@Cacheable`（读）
 
 - `@Cacheable` 是最核心、最常用的注解
-  - 它被放置在**“读数据”**的方法上（例如查询数据库的方法），用于自动执行**“旁路缓存” (Cache-Aside Pattern) **的**读逻辑**
+  - 它被放置在 **“读数据”** 的方法上（例如查询数据库的方法），用于自动执行 **“旁路缓存” (Cache-Aside Pattern) **的 **读逻辑**
+
+
+
+- **`@Cacheable` 行为简述**⭐⭐
+  - **行为依据**：`value` + `key`
+  - **行为**：
+    1. 根据 `value` + `key` **查** 缓存
+       - 如果 **有**：直接返回缓存值，**方法体不执行**
+       - 如果 **没有**：**执行方法体**，拿 **返回值** 去 **存** 缓存，再返回
 
 
 
@@ -3318,8 +3451,9 @@ public class SessionManager {
 - 当一个被 `@Cacheable` 标记的方法（如 `getUserById(1L)`）被调用时，Spring 的缓存切面会执行以下流程：
   1. **生成 Key**：
      - Spring 会根据注解中的 `value` 和 `key` 属性来生成一个最终存储在 Redis 中的 Key
-     - `value = "users"`：指定了缓存的“命名空间”（Cache Name），它会作为 Key 的**前缀**，例如 `users::`
-     - `key = "#id"`：这是 Spring 表达式语言 (SpEL)。`#id` 表示“使用方法参数中名为 id 的值”作为 Key 的**后缀**
+     - `value = "users"`：指定了缓存的“命名空间”（Cache Name），它会作为 Key 的 **前缀**，例如 `users::`
+     - 形如：`key = "#id"`：这是 Spring 表达式语言 (SpEL)
+       - `#id` 表示“使用方法参数中名为 id 的值”作为 Key 的 **后缀**
      - 最终生成的 Redis Key 可能是：`users::1`
   2. **检查缓存 (GET)**：
      - Spring 自动向 Redis 发送 `GET "users::1"` 命令
@@ -3333,7 +3467,7 @@ public class SessionManager {
        - Redis 返回 `nil` (空)
        - Spring **会执行方法体**（即 `System.out.println(...)` 和 `userRepository.findById(...)`）
        - 方法体从数据库查询到了 `User` 对象
-       - 在方法返回之前，Spring 会自动将这个 `User` 对象序列化（例如转为 JSON），并执行 `SET "users::1" "..."` 命令，将其**自动存入 Redis 缓存**
+       - 在方法返回之前，Spring 会自动将这个 `User` 对象序列化（例如转为 JSON），并执行 `SET "users::1" "..."` 命令，将其 **自动存入 Redis 缓存**
        - 最后，将 `User` 对象返回给调用方
 
 
@@ -3380,18 +3514,29 @@ public class SessionManager {
 
 
 
-## 4.3 `@CacheEvict`
+## 4.3 `@CacheEvict`（删）
 
 - `@Cacheable` 解决了“读”的问题，而 `@CacheEvict` 则解决了“写”的问题
-  - 当数据库中的数据发生**变更**（更新或删除）时，缓存中的数据必须被**移除**（Evict），否则用户就会读到过时的数据（脏数据）
+  - 当数据库中的数据发生 **变更**（更新或删除）时，缓存中的数据必须被 **移除**（Evict），否则用户就会读到过时的数据（脏数据）
 
-- `@CacheEvict` 负责自动执行“旁路缓存” (Cache-Aside Pattern) 的**写逻辑**，即：**先更新数据库，再删除缓存**
+- `@CacheEvict` 负责自动执行“旁路缓存” (Cache-Aside Pattern) 的 **写逻辑**，即： **先更新数据库，再删除缓存**
+
+
+
+- **`@CacheEvict` 行为简述**⭐⭐
+
+  - **行为依据**：`value` + `key`
+
+  - **行为**：
+    1. **执行方法体**（默认）
+    2. 方法成功后，根据 `value` + `key` 去 **删除** 对应的缓存
+    3. （它 **不关心** 方法返回值是什么）
 
 
 
 ### 4.3.1 基本用法
 
-- `@CacheEvict` 通常被放置在**“写数据”**的方法上（如 `updateUser` 或 `deleteUser`）
+- `@CacheEvict` 通常被放置在 **“写数据”** 的方法上（如 `updateUser` 或 `deleteUser`）
 
 #### 1. 用于更新操作
 
@@ -3442,10 +3587,19 @@ public class UserServiceImpl implements UserService {
      - **注意**：
        - 这是 `@CacheEvict` 的默认行为 (`beforeInvocation = false`)
        - 如果数据库操作失败（例如抛出异常），方法会在此处终止，**缓存删除操作也不会被执行**。这保证了操作的原子性
+     
   2. **生成 Key**：
      - 方法体成功执行完毕后，Spring 会根据注解中的 `value` 和 `key` 属性来生成要删除的 Key
-     - `value = "users"`，`key = "#user.id"`
+     
+       - `value = "users"`，`key = "#user.id"`
+     
+       > 形如：`key = "#id"`：这是 Spring 表达式语言 (SpEL)
+       >
+       > - `#id` 表示“使用方法参数中名为 id 的值”作为 Key 的 **后缀**
+       > - `#result`引用方法调用的结果
+     
      - 假设 `user.getId()` 为 `1L`，则生成的 Redis Key 为：`users::1`
+     
   3. **删除缓存 (DEL)**：
      - Spring 自动向 Redis 发送 `DEL "users::1"` 命令
      - 无论这个 Key 是否存在，Redis 都会执行删除
@@ -3476,13 +3630,13 @@ public class UserServiceImpl implements UserService {
 
 
 - **`key`**
-  - **必需**。必须与 `@Cacheable` 的 `key` 生成策略**完全一致**
+  - **必需**。必须与 `@Cacheable` 的 `key` 生成策略 **完全一致**
   - 例如，`getUserById(Long id)` 使用 `key = "#id"`，那么 `deleteUser(Long id)` 也必须使用 `key = "#id"`
 
 
 
-- **`allEntries`**
-  - **危险但有用**。是否清除该 `value`（命名空间）下的**所有**缓存
+- **`allEntries`**⭐
+  - **危险但有用**。是否清除该 `value`（命名空间）下的 **所有** 缓存
   - `@CacheEvict(value = "users", allEntries = true)`
   - **作用**：执行此方法后，所有以 `users::` 开头的 Key 都会被（批量）删除
   - **场景**：适用于“清空用户列表缓存”等批量操作，但要小心使用，避免误删
@@ -3490,22 +3644,46 @@ public class UserServiceImpl implements UserService {
 
 
 - **`beforeInvocation`**
-  - **重要**。是否在方法执行**之前**清除缓存
-  - `beforeInvocation = false` (默认)：方法执行**之后**清除。如果方法执行失败（抛异常），缓存不会被清除**（推荐）**
-  - `beforeInvocation = true`：方法执行**之前**清除
-    - **风险**：如果方法执行前清除了缓存，但方法体（如更新数据库）执行失败了，那么缓存被清了，数据库却是旧数据。此时“读”请求进来，会把旧数据重新加载到缓存中，导致不一致**（不推荐）**
+  - **重要**。是否在方法执行 **之前** 清除缓存
+  
+  - `beforeInvocation = false` (默认)：方法执行 **之后** 清除。如果方法执行失败（抛异常），缓存不会被清除**（推荐）**
+  
+  - `beforeInvocation = true`：方法执行 **之前** 清除
+    
+    - **风险**：
+    
+      如果方法执行前清除了缓存，但方法体（如更新数据库）执行失败了，那么缓存被清了，数据库却是旧数据
+    
+      此时“读”请求进来，会把旧数据重新加载到缓存中，导致不一致**（不推荐）**
+    
+      > 不推荐的核心：它允许一个失败的写操作（更新）对缓存产生了“删除”的副作用，这破坏了原子性
 
 
 
 ## 4.4 `@CachePut` (强制更新缓存)
 
-`@CachePut` 是三个注解中用法最特殊的一个。它通常也标记在**“写数据”**的方法上（例如 `updateUser`），但它的目的**不是“删除”缓存**，而是**“更新”缓存**。
+- `@CachePut` 是三个注解中用法最特殊的一个
 
-它的核心机制是：**方法体总会被执行**，然后将方法的**返回值**强制放入缓存。
+  它通常也标记在 **“写数据”** 的方法上（例如 `updateUser`），但它的目的 **不是“删除”缓存** ，而是 **“更新”缓存**
+
+  - 它的核心机制是：**方法体总会被执行**，然后将方法的 **返回值** 强制放入缓存
+
+
+
+- **`@CachePut` 行为简述**⭐⭐
+
+  - **行为依据**：`value` + `key` + **方法返回值**
+
+  - **行为**：
+    1. **总是执行方法体**（它不查缓存）
+    2. 方法成功后，拿 **方法的返回值**
+    3. 根据 `value` + `key` 去 **覆盖** 对应的缓存
+
+
 
 ### 4.4.1 基本用法
 
-- 假设我们有一个 `updateUser` 方法，并且我们希望在更新数据库后，**立刻**将**最新的 `User` 对象**（可能包含数据库生成的默认值或时间戳）更新到缓存中，而不是删除它
+- 假设我们有一个 `updateUser` 方法，并且我们希望在更新数据库后，**立刻** 将 **最新的 `User` 对象**（可能包含数据库生成的默认值或时间戳）更新到缓存中，而不是删除它
 
   ```JAVA
   @Service
@@ -3539,45 +3717,184 @@ public class UserServiceImpl implements UserService {
 
 1. **方法体总被执行**：
    - `updateUserAndRefreshCache` 方法被调用
-   - Spring **不会**在方法执行前检查缓存
+   - Spring **不会** 在方法执行前检查缓存
    - 方法体（`userRepository.save(user)`）**总是会被执行**
+   
 2. **获取返回值**：
    - 方法执行完毕，返回 `updatedUser` 对象
+   
 3. **生成 Key**：
    - Spring 根据 `value = "users"` 和 `key = "#user.id"` 生成 Key（例如 `users::1`）
+   
+     > 形如：`key = "#id"`：这是 Spring 表达式语言 (SpEL)
+     >
+     > - `#id` 表示“使用方法参数中名为 id 的值”作为 Key 的 **后缀**
+     > - `#result`引用方法调用的结果
+   
 4. **更新缓存 (SET)**：
-   - Spring 将 `updatedUser` 对象序列化，然后自动向 Redis 发送 `SET "users::1" "..."` 命令，**强制覆盖**该 Key 对应的缓存数据
+   - Spring 将 `updatedUser` 对象序列化，然后自动向 Redis 发送 `SET "users::1" "..."` 命令，**强制覆盖** 该 Key 对应的缓存数据
 
 
 
 ### 4.4.3 `@CachePut` vs `@CacheEvict`
 
-| 特性         | `@CachePut` (更新缓存)   | `@CacheEvict` (删除缓存)          |
-| ------------ | ------------------------ | --------------------------------- |
-| **策略**     | 先更新DB，再**更新**缓存 | 先更新DB，再**删除**缓存          |
-| **方法体**   | 总是执行                 | 总是执行                          |
-| **缓存操作** | `SET` (覆盖)             | `DEL` (删除)                      |
-| **返回值**   | **必须**返回要缓存的对象 | 返回值类型**随意** (e.g., `void`) |
+| 特性         | `@CachePut` (更新缓存)     | `@CacheEvict` (删除缓存)           |
+| ------------ | -------------------------- | ---------------------------------- |
+| **策略**     | 先更新DB，再 **更新** 缓存 | 先更新DB，再 **删除** 缓存         |
+| **方法体**   | 总是执行                   | 总是执行                           |
+| **缓存操作** | `SET` (覆盖)               | `DEL` (删除)                       |
+| **返回值**   | **必须** 返回要缓存的对象  | 返回值类型 **随意** (e.g., `void`) |
 
 
 
 ### 4.4.4 `@CachePut` 的使用场景
 
-- `@CachePut` 在标准的“旁路缓存”模式中**不常用**，因为 `CacheEvict`（删除缓存）通常是更简单、更健壮的策略
+- `@CachePut` 在标准的“旁路缓存”模式中 **不常用**，因为 `CacheEvict`（删除缓存）通常是更简单、更健壮的策略
 
 - 它的主要使用场景是：
-  1. **数据强一致性要求**：希望在更新数据库后，缓存**立即**被更新为最新数据，而不是等待下一次“读”请求来回填
-  2. **缓存预热**：方法体不是从数据库查，而是通过复杂计算得到一个结果，希望**总是执行计算**，并**总是把最新结果**放入缓存
+  1. **数据强一致性要求**：希望在更新数据库后，缓存 **立即** 被更新为最新数据，而不是等待下一次“读”请求来回填
+  2. **缓存预热**：方法体不是从数据库查，而是通过复杂计算得到一个结果，希望 **总是执行计算**，并 **总是把最新结果** 放入缓存
 
 - **注意**：
 
-  - 使用 `@CachePut` 必须确保方法的**返回值**就是你要存入缓存的那个对象
+  - 使用 `@CachePut` 必须确保方法的 **返回值** 就是你要存入缓存的那个对象
 
     如果你把方法写成 `public void updateUser(...)`，`@CachePut` 会尝试把 `null` 存入缓存（取决于序列化器配置），导致缓存数据被破坏
 
 
 
-## 4.5 缓存配置 (RedisCacheManager)
+## 4.5 @CacheConfig (类级别公共配置)
+
+`@CacheConfig` 是一个 **类级别** 的辅助注解，它本身不触发任何缓存操作，其主要目的是 **提取公共的缓存配置** ，以减少重复代码，提高可维护性。
+
+- **使用场景**： 
+
+  - 在一个 Service 实现类中（例如 `UserServiceImpl`），通常所有的方法（`@Cacheable`, `@CachePut`, `@CacheEvict`）操作的都是 **同一个缓存空间**（例如 `value = "users"`）
+
+    这会导致每个注解上都必须重复声明 `value = "users"`，`@CacheConfig` 就是为了解决这个问题
+
+
+
+### 4.5.1 使用 @CacheConfig 前后对比
+
+#### 1. 未使用 @CacheConfig (配置冗余)
+
+在 `UserServiceImpl` 中，`value = "users"` 在每个注解中都出现了
+
+```java
+@Service
+public class UserServiceImpl implements UserService {
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Cacheable(value = "users", key = "#id")
+    @Override
+    public User getUserById(Long id) {
+        System.out.println("=== 正在从数据库查询用户: " + id + " ===");
+        return userRepository.findById(id).orElse(null);
+    }
+
+    @CacheEvict(value = "users", key = "#id")
+    @Override
+    public void deleteUser(Long id) {
+        System.out.println("=== F 正在删除数据库: " + id + " ===");
+        userRepository.deleteById(id);
+    }
+    
+    @CachePut(value = "users", key = "#user.id")
+    @Override
+    public User updateUserAndRefreshCache(User user) {
+        System.out.println("=== 
+        正在更新数据库 (CachePut): " + user.getId() + " ===");
+        return userRepository.save(user);
+    }
+}
+```
+
+
+
+#### 2. 使用 @CacheConfig (配置简洁)
+
+我们将公共的 `cacheNames`（`value` 属性的别名）提取到类声明上
+
+```java
+@Service
+@CacheConfig(cacheNames = "users") // <-- 提取公共的缓存名称
+public class UserServiceImpl implements UserService {
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Cacheable(key = "#id") // <-- 无需再写 value
+    @Override
+    public User getUserById(Long id) {
+        System.out.println("=== 
+        正在从数据库查询用户: " + id + " ===");
+        return userRepository.findById(id).orElse(null);
+    }
+
+    @CacheEvict(key = "#id") // <-- 无需再写 value
+    @Override
+    public void deleteUser(Long id) {
+        System.out.println("=== 
+        正在删除数据库: " + id + " ===");
+        userRepository.deleteById(id);
+    }
+    
+    @CachePut(key = "#user.id") // <-- 无需再写 value
+    @Override
+    public User updateUserAndRefreshCache(User user) {
+        System.out.println("=== 
+        正在更新数据库 (CachePut): " + user.getId() + " ===");
+        return userRepository.save(user);
+    }
+}
+```
+
+
+
+### 4.5.2 关键属性说明
+
+`@CacheConfig` 注解允许您配置多个公共属性，最常用的就是 `cacheNames`
+
+- **`cacheNames`** (或 **`value`**)
+  - 指定该类中所有缓存操作的 **默认** 缓存空间名称
+  - **注意**：`@Cacheable` 和 `@CacheEvict` 上的 `value` 属性是 `cacheNames` 属性的别名，因此 `@CacheConfig(value = "users")` 和 `@CacheConfig(cacheNames = "users")` 是等效的
+- **`keyGenerator`**
+  - 指定一个**默认**的 `KeyGenerator` Bean 的名称
+- **`cacheManager`**
+  - 指定一个**默认**的 `CacheManager` Bean 的名称（在拥有多个 `CacheManager` 时有用）
+
+
+
+### 4.5.3 配置覆盖规则
+
+`@CacheConfig` 提供的只是**默认值**
+
+如果在方法级别的注解（如 `@Cacheable`）上**也**指定了相同的属性（例如 `value`），那么**方法级别的配置会覆盖类级别的配置**
+
+```java
+@Service
+@CacheConfig(cacheNames = "users") // 默认使用 "users" 缓存
+public class UserServiceImpl implements UserService {
+
+    @Cacheable(key = "#id") // <-- 继承 @CacheConfig，使用 "users" 缓存
+    public User getUserById(Long id) {
+        // ...
+    }
+
+    @Cacheable(value = "admins", key = "#id") // <-- 覆盖 @CacheConfig
+    public User getAdminById(Long id) {
+        // 这个方法会使用 "admins" 缓存，而不是 "users" 缓存
+        // ...
+    }
+}
+```
+
+
+
+## 4.6 缓存配置 (RedisCacheManager)
 
 - `@EnableCaching` 开启缓存功能后，Spring Boot 会自动配置一个 `RedisCacheManager` (缓存管理器) 的 Bean
 
@@ -3586,11 +3903,11 @@ public class UserServiceImpl implements UserService {
     1. **默认使用 JDK 序列化**：它会使用 `JdkSerializationRedisSerializer`，导致存入 Redis 的数据可读性极差
     2. **默认 TTL 为 -1 (永久有效)**：缓存永不过期，这在生产环境中是灾难性的，会导致内存溢出
 
-    因此，我们**必须**自定义一个 `RedisCacheManager` Bean，来覆盖 Spring Boot 的默认配置
+    因此，我们 **必须** 自定义一个 `RedisCacheManager` Bean，来覆盖 Spring Boot 的默认配置
 
 
 
-### 4.5.1 自定义 RedisCacheManager (重点)
+### A 自定义 RedisCacheManager
 
 - 我们回到 `RedisConfig`配置类，在里面添加一个新的 `@Bean`
 
@@ -3603,11 +3920,11 @@ import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Bean;
-import com.fasterxml.jackson.databind.ObjectMapper; // (来自笔记6)
-import com.fasterxml.jackson.annotation.JsonTypeInfo; // (来自笔记6)
-import com.fasterxml.jackson.annotation.PropertyAccessor; // (来自笔记6)
-import com.fasterxml.jackson.annotation.JsonAutoDetect; // (来自笔记6)
-import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator; // (来自笔记6)
+import com.fasterxml.jackson.databind.ObjectMapper; 
+import com.fasterxml.jackson.annotation.JsonTypeInfo; 
+import com.fasterxml.jackson.annotation.PropertyAccessor; 
+import com.fasterxml.jackson.annotation.JsonAutoDetect; 
+import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator; 
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -3626,13 +3943,13 @@ public class RedisConfig {
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {
         
-        // 1. 配置序列化器 (同笔记6)
+        // 1. 配置序列化器
         // Key 使用 String 序列化
         StringRedisSerializer stringSerializer = new StringRedisSerializer();
         // Value 使用 JSON 序列化
         Jackson2JsonRedisSerializer<Object> jsonSerializer = new Jackson2JsonRedisSerializer<>(Object.class);
         
-        // (同笔记6，配置 ObjectMapper 以支持反序列化复杂的泛型对象)
+        // (配置 ObjectMapper 以支持反序列化复杂的泛型对象)
         ObjectMapper om = new ObjectMapper();
         om.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
         om.activateDefaultTyping(LaissezFaireSubTypeValidator.instance, 
@@ -3677,11 +3994,11 @@ public class RedisConfig {
 
 
 
-## 4.6 缓存实战：应对“三兄弟”问题
+## 4.7 缓存实战：应对“三兄弟”问题
 
 - 在生产环境中，高并发下的缓存使用必须考虑以下三个经典问题：
 
-### 4.6.1 缓存穿透
+### 4.7.1 缓存穿透
 
 >Cache Penetration
 
@@ -3704,7 +4021,7 @@ public class RedisConfig {
 
 
 
-### 4.6.2 缓存击穿
+### 4.7.2 缓存击穿
 
 >Cache Breakdown
 
@@ -3739,7 +4056,7 @@ public class RedisConfig {
 
 
 
-### 4.6.3 缓存雪崩 (Cache Avalanche)
+### 4.7.3 缓存雪崩
 
 - **现象**：**大量**的 Key 在**同一时刻**集体失效 (过期)
 
@@ -3769,6 +4086,128 @@ public class RedisConfig {
   ```
 
   - 这样，`users` 缓存的过期时间就会在 30-35 分钟之间随机分布，避免了同时失效
+
+
+
+## 4.8 Spring Cache 常见的问题
+
+在使用 Spring Cache 时，有一些常见的“陷阱”是由 AOP 代理机制或与其他注解（如 `@Transactional`）的交互引起的。
+
+### a. 陷阱一：注解的“自调用失效”问题
+
+- **问题描述**： 在一个 Service 类中，一个 **没有** 缓存注解的方法 `A`，去调用同一个类中 **有** 缓存注解的方法 `B`，会导致方法 `B` 的缓存 **不生效**
+
+  ```java
+  @Service
+  public class UserServiceImpl implements UserService {
+  
+      @Autowired
+      private UserRepository userRepository;
+  
+      @Cacheable(value = "users", key = "#id")
+      @Override
+      public User getUserById(Long id) {
+          System.out.println("=== 正在从数据库查询用户: " + id + " ===");
+          return userRepository.findById(id).orElse(null);
+      }
+  
+      /**
+       * 外部调用这个方法
+       */
+      public User getAndProcessUser(Long id) {
+          // ... 假设有一些前置处理 ...
+  
+          // ！！！问题所在：内部调用 this.getUserById(id) ！！！
+          // ！！！@Cacheable 会失效，导致每次都查数据库 ！！！
+          User user = this.getUserById(id); 
+  
+          // ... (其他处理) ...
+          return user;
+      }
+  }
+  ```
+
+- **原因分析**： Spring Cache（以及 `@Transactional` 等）是基于 Spring AOP（面向切面编程）实现的，它通过**动态代理**来工作
+
+  1. 当外部调用 `userService.getAndProcessUser(1L)` 时，它访问的是 Spring 创建的 `UserService` **代理对象**
+
+  2. `getAndProcessUser` 方法本身没有注解，所以代理对象直接执行了它的方法体
+
+  3. 当方法体内部执行 `this.getUserById(id)` 时，它使用的是 `this` 关键字，`this` 指向的是**原始的 `UserServiceImpl` 对象**，而不是代理对象
+
+  4. 调用原始对象的方法会**完全绕过** Spring AOP 代理，导致缓存切面没有机会介入，`@Cacheable` 注解自然就失效了
+
+     
+
+- **解决方案**（任选其一）：
+
+  1. **（推荐）重构代码**：将需要缓存的方法（如 `getUserById`）移到另一个单独的 Service（例如 `UserCacheService`）中，然后在 `UserServiceImpl` 中注入并调用 `userCacheService.getUserById(id)`
+
+  2. **（不常用）注入自己**：在 `UserServiceImpl` 中注入 `UserService` 代理对象自身（Spring 会自动处理依赖注入，确保注入的是代理）
+
+     ```java
+     @Service
+     public class UserServiceImpl implements UserService {
+         @Autowired
+         private UserService selfProxy; // 注入代理对象
+     
+         public User getAndProcessUser(Long id) {
+             // 使用代理对象调用，AOP 会生效
+             User user = selfProxy.getUserById(id); 
+             return user;
+         }
+         // ... other methods ...
+     }
+     ```
+
+  3. **（不常用）使用 `AopContext`**：通过 `AopContext.currentProxy()` 获取当前代理对象，但需要额外配置（`@EnableAspectJAutoProxy(exposeProxy = true)`）
+
+
+
+### b. 陷阱二：@CacheEvict 与 @Transactional 的时序问题
+
+- **问题描述**： 
+
+  - 当 `@CacheEvict`（默认 `beforeInvocation = false`）和 `@Transactional` 标记在同一个方法上时（例如 `updateUser`），由于二者都依赖 AOP，会产生一个危险的执行时序问题
+
+- **危险流程**：
+
+  -  `@CacheEvict` 的默认行为是在 **方法执行完毕后** 删除缓存。而 `@Transactional` 是在 **方法执行完毕后** 才 **提交事务**
+
+    假设 `updateUser` 方法同时使用了这两个注解：
+
+    1. `updateUser` 方法开始执行（事务开启）	
+    2. 方法体执行数据库 `UPDATE` 操作（此时事务 **尚未提交**）
+    3. `updateUser` 方法体执行完毕，返回
+    4. AOP 拦截器介入，首先执行 `@CacheEvict` 的逻辑（因为它在 `@Transactional` 之前或顺序相近）
+    5. `@CacheEvict` 成功执行 `DEL "users::1"`，**缓存被删除**
+    6. 接着，AOP 拦截器执行 `@Transactional` 的提交逻辑
+    7. **！！！此时，如果数据库事务提交失败**（例如因为唯一键冲突、网络故障或数据库锁超时）
+    8. 事务 **回滚**，数据库中的数据 **恢复到了旧状态**
+
+    
+
+- **最终结果**： **缓存被删了，但数据库回滚了旧数据**
+
+  当下一个 `getUserById(1L)` 请求进来时：
+
+  1. `@Cacheable` 检查缓存，发现 `users::1` 不存在（缓存未命中）
+  2. 执行方法体，去数据库查询
+  3. 查到了被回滚的 **旧数据**
+  4. 将这个 **旧数据** 重新写入了 `users::1` 缓存
+
+  这导致了严重的 **数据不一致** 问题
+
+- **解决方案**： 核心思想是：**必须在事务（Transaction）成功提交（Commit）之后，才去执行缓存删除（Evict）操作**
+
+  1. **（推荐）使用事务同步管理器**： 
+     - 通过 `TransactionSynchronizationManager.registerSynchronization` 注册一个回调，在事务 `afterCommit()` 事件中再执行缓存删除
+  2. **（推荐）使用 Spring Event**： 
+     - 在 `updateUser` 方法中（事务内）发布一个“用户更新事件”
+       然后创建一个 **事务性事件监听器**（使用 `@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)`），
+       这个监听器只会在事务成功提交后被触发，由它来负责执行缓存删除
+
+
 
 
 

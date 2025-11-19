@@ -449,9 +449,9 @@ Stream<String> wordStream = java.util.regex.Pattern.compile("\\s+")
 
 - **返回新 Stream**：允许操作链式调用（fluent API）
 
-- **惰性执行 (Lazy Execution)**：它们不立即执行。只有当终端操作被调用时，数据才会真正流过整个操作链
+- **惰性执行 (Lazy Execution)**：它们不立即执行，只是记录下需要对数据执行哪些步骤。只有当终端操作被调用时，数据才会真正流过整个操作链
 
-  >Stream API 惰性执行的核心目的实际上是为了 **高性能** 和 **高效率**
+  >Stream API  **惰性执行** 的核心目的实际上是为了 **高性能** 和 **高效率**
 
 
 
@@ -835,15 +835,88 @@ List<Integer> list = intStream
 
 ## 4. 终端操作
 
-终端操作是 Stream 管道的触发器。它们是唯一会“拉动”数据流过所有中间操作（如 `filter`, `map`）的环节
+### 4.0 相关概念
+
+#### a. 简述
+
+终端操作是 Stream 管道的触发器。这些操作会触发整个 Stream 流水线的实际计算，并产生一个最终结果或副作用
 
 
 
-**关键特性：**
+#### b. **关键特性**
 
 - **触发计算**：一旦调用终端操作，整个 Stream 管道将开始处理数据
 - **消费 Stream**：一个 Stream 只能被一个终端操作消费一次。消费后，该 Stream 将关闭且无法重用
 - **产生结果**：它们返回一个非 Stream 的结果（如一个值、一个集合、`void`）或产生副作用（如 `forEach`）
+
+
+
+#### c. 垂直处理⭐
+
+- **垂直处理** 是指 Stream 流水线在处理数据时，会**一次只拉取一个元素**，并让这个元素**完整地通过整个处理链**（从第一个中间操作到最后一个中间操作），直到它被终端操作消耗或在中途被丢弃
+
+  然后，系统才会回去拉取**下一个**元素，重复这个过程
+
+  - **垂直处理（Stream 的方式）⭐：**
+    - `元素1` -> `filter()` -> `map()` -> `collect()`
+    - `元素2` -> `filter()` -> `map()` -> `collect()`
+    - `元素3` -> `filter()` -> ...
+  - **水平处理（错误的方式）：**
+    - `元素1, 2, 3...` -> `filter()` (全部过滤完)
+    - `过滤后的元素...` -> `map()` (全部转换完)
+    - `转换后的元素...` -> `collect()` (全部收集)
+
+  Stream API 采用的是 **垂直处理** ⭐
+
+- **示例**
+
+  ```java
+  public static void main(String[] args) {
+      List<String> list = Arrays.asList("a1", "a2", "b1", "c1", "c2");
+  
+      System.out.println("Stream 开始执行......");
+  
+      List<String> result = list.stream()
+          .filter(s -> {
+              System.out.println("--- filter 接收: " + s + " ---");
+              boolean startsWithC = s.startsWith("c");
+              System.out.println("    filter 结果: " + (startsWithC ? "通过" : "丢弃"));
+              return startsWithC;
+          })
+          .map(s -> {
+              System.out.println("    --- map 接收: " + s + " ---"); // 打印接收到的小写
+              String upperS = s.toUpperCase();
+              System.out.println("        map 转换后: " + upperS); // 打印转换后的大写
+              return upperS; // 返回大写
+          })
+          .collect(Collectors.toList());
+  
+      System.out.println("Stream 执行完毕。");
+      System.out.println("最终结果: " + result);
+  }
+  ```
+
+  ```java
+  Stream 开始执行......
+  --- filter 接收: a1 ---
+      filter 结果: 丢弃
+  --- filter 接收: a2 ---
+      filter 结果: 丢弃
+  --- filter 接收: b1 ---
+      filter 结果: 丢弃
+  --- filter 接收: c1 ---
+      filter 结果: 通过
+      --- map 接收: c1 ---
+          map 转换后: C1
+  --- filter 接收: c2 ---
+      filter 结果: 通过
+      --- map 接收: c2 ---
+          map 转换后: C2
+  Stream 执行完毕。
+  最终结果: [C1, C2]
+  ```
+
+
 
 
 
@@ -1056,7 +1129,9 @@ boolean noNegative = numbers.stream()
 
   - **作用**: 返回流中的**第一个**元素
   - **返回**: `Optional<T>`
-  - **特性**: 总是返回第一个元素（如果存在）。在串行流中非常明确
+  - **特性**: 
+    - 总是返回第一个元素（如果存在）。在串行流中非常明确
+    - **短路**
 
 - `findAny()`:
 
@@ -1069,6 +1144,8 @@ boolean noNegative = numbers.stream()
     - 在串行流中，它通常返回第一个元素（但规范不保证）
 
       在**并行流**中，它被高度优化，会返回最先处理完的线程找到的任意一个元素，性能通常优于 `findFirst`
+    
+    - **短路**
 
 ```java
 List<Integer> numbers = Arrays.asList(1, 2, 3, 4, 5);
