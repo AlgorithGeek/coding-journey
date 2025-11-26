@@ -708,7 +708,7 @@ public void updateFill(MetaObject metaObject) {
 
 ### `@TableLogic`
 
-- **作用**：用于实现**逻辑删除**
+- **作用**：用于实现 **逻辑删除**
 
 - **使用场景**：在需要“假删除”的业务场景中，删除操作实际上是执行 `UPDATE`，修改一个表示删除状态的字段
 
@@ -719,8 +719,8 @@ public void updateFill(MetaObject metaObject) {
 
 - **工作机制**：
 
-  - 当你对标记了 `@TableLogic` 的实体执行**删除**操作时，MP 会自动将 `DELETE` 语句转换为 `UPDATE ... SET deleted = 1 WHERE ...`
-  - 当你执行**查询**操作时，MP 会自动在 `WHERE` 条件中追加 `AND deleted = 0`，确保你查不到已逻辑删除的数据
+  - 当你对标记了 `@TableLogic` 的实体执行 **删除** 操作时，MP 会自动将 `DELETE` 语句转换为 `UPDATE ... SET deleted = 1 WHERE ...`
+  - 当你执行 **查询** 操作时，MP 会自动在 `WHERE` 条件中追加 `AND deleted = 0`，确保你查不到已逻辑删除的数据
 
 - **代码示例**：
 
@@ -1335,6 +1335,10 @@ wrapper.nested(w -> w.gt(User::getAge, 25).like(User::getName, "张"))
 
 ## 4. `LambdaUpdateWrapper` 
 
+`LambdaUpdateWrapper` 是 MyBatis-Plus 提供的一个用于构建 `UPDATE` SQL 语句的类型安全包装器。
+
+相比于 `LambdaQueryWrapper` 主要关注筛选数据，`LambdaUpdateWrapper` 的核心职责是 **定义数据变更（SET 子句）和限定变更范围（WHERE 子句）**
+
 >**`LambdaUpdateWrapper`** = `SET` 子句构建器 + **`WHERE` 子句构建器**
 >
 >我认为很多方法都是where，然后剩余的都是会特殊说明的
@@ -1347,7 +1351,7 @@ wrapper.nested(w -> w.gt(User::getAge, 25).like(User::getName, "张"))
 
 - 这是 `LambdaUpdateWrapper` 独有的方法
 
-  - **`set(R column, Object val)`**: 设置某个字段的值。这是最核心、最常用的方法。
+  - **`set(R column, Object val)`**: 设置某个字段的值。这是最核心、最常用的方法。它直接指定某个字段需要更新为特定值
 
     - 示例
 
@@ -1367,24 +1371,48 @@ wrapper.nested(w -> w.gt(User::getAge, 25).like(User::getName, "张"))
 
       
 
-  - **`setSql(String sql)`**: 设置 SQL 表达式。这是一个非常强大但也需要谨慎使用的功能。
+  - **`setSql(String sql)`**: 设置 SQL 表达式。这是一个非常强大但也需要谨慎使用的功能
 
     > 我补要用这个
 
-    - 它可以让你写出 `SET score = score + 10` 这样的语句。
-    - **注意**：`setSql` 中的内容不会被转义，如果拼接了用户输入，会有 SQL 注入风险。
+    - 它可以让你写出 `SET score = score + 10` 这样的语句
+    - **注意**：`setSql` 中的内容不会被转义，如果拼接了用户输入，会有 SQL 注入风险
+    
+    ```java
+    // 场景：将余额扣减 100（原子更新，非覆盖更新）
+    // SQL 片段：SET balance = balance - 100
+    updateWrapper.setSql("balance = balance - 100");
+    ```
+    
+    
 
 
 
 ### `WHERE`
 
-- 这部分的方法与 `LambdaQueryWrapper` **完全通用**
+- 这部分的方法与 `LambdaQueryWrapper` **完全通用**。所有用于筛选的 API 在此均可使用
+
+  - **基础筛选**：`eq` (等于), `ne` (不等于), `gt` (大于), `ge` (大于等于), `lt` (小于), `le` (小于等于)
+  - **模糊查询**：`like`, `notLike`, `likeLeft`, `likeRight`
+  - **空值判断**：`isNull`, `isNotNull`
+  - **包含关系**：`in`, `notIn`
+  - **逻辑连接**：`or`, `and`, `nested` (嵌套括号)
+
+  ```java
+  // SQL 片段：WHERE (name = 'Jack' AND age > 20)
+  updateWrapper.eq(User::getName, "Jack")
+               .gt(User::getAge, 20);
+  ```
+
+  
 
 
 
 ### 执行更新
 
-- 构建好 `UpdateWrapper` 后，需要通过 `BaseMapper` 的 `update` 方法来执行
+#### 基本概念
+
+- 构建好 `UpdateWrapper` 后，需要通过 `BaseMapper` 的 `update` 方法来执行。此方法接受两个参数，它们共同决定了最终生成的 SQL 语句
 
   ```java
   // update 方法签名
@@ -1397,7 +1425,7 @@ wrapper.nested(w -> w.gt(User::getAge, 25).like(User::getName, "张"))
 
     在大多数只使用 `updateWrapper` 来指定 `SET` 内容的场景下，**这个参数应传入 `null`**
 
-- **`updateWrapper`**: 传入我们构建好的 `LambdaUpdateWrapper` 实例。
+- **`updateWrapper`**: 传入我们构建好的 `LambdaUpdateWrapper` 实例
 
 - **标准用法：**
 
@@ -1406,6 +1434,99 @@ wrapper.nested(w -> w.gt(User::getAge, 25).like(User::getName, "张"))
   // 第一个参数传 null，避免 entity 中的值意外覆盖 set 的设置
   userMapper.update(null, updateWrapper);
   ```
+
+
+
+#### 更新策略
+
+##### 策略1：纯 Wrapper 模式（推荐）⭐
+
+完全通过 `LambdaUpdateWrapper` 来指定 `SET` 和 `WHERE`
+
+- **用法**：`entity` 传 `null`，`updateWrapper` 包含 `set()` 和 `eq()` 等调用
+
+- **优点**：逻辑清晰，避免 `entity` 中的默认值（如 0 或 null）意外覆盖数据库字段；支持将字段更新为 `null`
+
+- **代码示例**：
+
+  ```java
+  LambdaUpdateWrapper<User> wrapper = new LambdaUpdateWrapper<>();
+  wrapper.set(User::getStatus, 1)      // SET status = 1
+         .eq(User::getId, 100L);       // WHERE id = 100
+  
+  // 执行
+  userMapper.update(null, wrapper);
+  ```
+
+
+
+##### 策略2：混合模式 (Entity + Wrapper)
+
+>我不太建议使用这种方式
+
+如果同时传入了 `entity` 和配置了 `set` 的 `wrapper`，MyBatis-Plus 会将两者的 `SET` 内容 **合并**
+
+- **合并逻辑**：
+
+  - **SET 子句来源**：`entity` 中非 null 的字段 **+** `wrapper.set()` 配置的字段
+  - **WHERE 子句来源**：**仅** `wrapper` (eq, gt 等条件)
+
+  >**即使使用了 entity，wrapper 中的 eq 依然是必须的，否则会全表更新**
+
+- **典型应用场景**：使用 `entity` 更新大部分常规字段，同时使用 `wrapper` 强制将某些字段更新为 `NULL`（因为 entity 无法表达更新为 null）
+
+- **代码示例**：
+
+  ```java
+  // 1. 准备要更新的数据 (SET 部分)
+  User data = new User();
+  data.setAge(25); 
+  
+  // 2. 准备更新条件 (WHERE 部分)
+  LambdaUpdateWrapper<User> wrapper = new LambdaUpdateWrapper<>();
+  wrapper.eq(User::getName, "Tom"); // 有效！这是唯一的 WHERE 来源
+  
+  // SQL: UPDATE user SET age=25 WHERE name = 'Tom'
+  userMapper.update(data, wrapper);
+  ```
+
+- **极度危险：Entity 中的 ID 陷阱** 如果你的 `data` 对象中不小心包含了 ID
+
+  ```java
+  User data = new User();
+  data.setId(1L);   // 注意这里！
+  data.setAge(25);
+  
+  wrapper.eq(User::getId, 2L); // 试图更新 ID 为 2 的记录
+  
+  // SQL: UPDATE user SET id=1, age=25 WHERE id=2
+  ```
+
+  - **后果**：它不会报错，而是试图把 ID 为 2 的记录的主键 **修改** 为 1！这通常会导致主键冲突错误或数据混乱
+  - **原则**：在混合模式下，作为第一个参数的 `entity` **绝对不要设置主键 ID**，除非你真的想修改主键值
+
+- **冲突警告**： 如果同一个字段在 `entity` 中有值，且在 `wrapper.set()` 中也设置了值，**两者都会出现在 SQL 中**（如 `SET age=25, age=30`）
+  - 虽然大多数数据库（如 MySQL）会执行后一个值，但这属于不规范用法，**应避免对同一字段重复定义**
+
+
+
+##### ⚠️ 危险误区：`update(entity, null)`
+
+很多新手会尝试将第二个参数传 `null`，期望它像 `updateById` 一样工作。
+
+- **后果**：由于 `wrapper` 为空，生成的 SQL **没有 WHERE 子句**。
+- **行为**：**全表更新** (UPDATE table SET ...)。
+- **正确做法**：如果你只想根据主键更新实体，请直接使用 `updateById` 方法。
+
+```
+// 错误示范：会导致全表更新！(除非配置了 BlockAttackInnerInterceptor)
+userMapper.update(user, null);
+
+// 正确示范：根据 ID 更新
+userMapper.updateById(user);
+```
+
+
 
 
 
@@ -2405,6 +2526,12 @@ public class LambdaUtils {
           insert-strategy: ignored  # 或 not_null
           update-strategy: ignored
     ```
+
+
+
+## 3. 关于 update 相关方法 能不能只传入id
+
+不行！！！必须传入对象，因为更新你得传入具体更新什么值，你不能只把要更新的对象的 id 传进去，而不传要更新的数据
 
 
 

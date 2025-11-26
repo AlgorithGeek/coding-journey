@@ -262,13 +262,13 @@ Spring Cloud 并非一个单一的技术，它也并不是一个框架，而是 
         		<artifactId>spring-cloud-alibaba-dependencies</artifactId>
         		<version>2023.0.3.3</version>
         		<type>pom</type>
-        		<scope>import</scope>
+        		<scope>import</scope>	<!-- ⭐ 这里注意一定要写 -->
   		</dependency>
       </dependencies>
   </dependencyManagement>
   ```
 
-  - 注意这里一定要加上**`<scope> import </scope>`**，这里 **MVN Repository** 的网站里面没有写，我真服了，图片证据如下👇
+  - ⭐注意这里一定要加上**`<scope> import </scope>`**，这里 **MVN Repository** 的网站里面没有写，我真服了，图片证据如下👇
 
     ![image-20251008075538973](./assets/image-20251008075538973.png)
 
@@ -445,19 +445,25 @@ Spring Cloud 并非一个单一的技术，它也并不是一个框架，而是 
 
   - 在微服务架构中，服务的数量和运行位置经常会发生变化：
     - 系统扩容时，可能新增多个实例
-    - 某个实例宕机或重启后，IP 地址可能改变
-    - 服务升级发布时，旧版本下线、新版本上线，端口号也可能不同
-    - ......
+    - 某个实例宕机或重启后，**IP 地址可能改变**
+    - 服务升级发布时，旧版本下线、新版本上线，**端口号也可能不同**
+    - **......**
 
-  - 如果我们在配置文件中**手动写死每个服务的 IP 和端口**，那每次变动都要去修改配置、重新部署，非常麻烦，而且极容易出错
+  - 如果我们在配置文件中 **手动写死每个服务的 IP 和端口** ，那每次变动都要去修改配置、重新部署，**非常麻烦，而且极容易出错**
 
 所以，为了解决 **服务实例动态变化导致的调用不稳定问题**，
 
-我们**引入**一个统一的机制，用来  **自动注册服务实例并提供动态发现能力**
+我们 **引入** 一个统一的机制，用来  **自动注册服务实例并提供动态发现能力**
 
 这个机制就是 **服务注册与发现**
 
 - **Naming Module（注册中心）** 负责实现这个机制
+
+> ⭐emmmm...,说的还是有点书面，可能有点不好get，简单来说的话，可以把它理解成：他的核心职责是 **“维护一张动态的 IP端口 地址表”**
+>
+> - 然后这句：**自动注册服务实例并提供动态发现能力**，可以这样理解：
+>   - **自动注册服务实例**：**自动记录上线服务的 IP**
+>   - **动态发现能力**：**实时查询 IP 列表**
 
 ---
 
@@ -506,7 +512,7 @@ Spring Cloud 并非一个单一的技术，它也并不是一个框架，而是 
 
      当实例增删或状态变化时，Nacos Server 会**通知客户端**，`order-service` 的本地监听器收到事件后**更新本地缓存**（客户端也会定期刷新以兜底）
 
-- **选择具体哪个实例**进行调用由**客户端侧的负载均衡组件**决定（例如 OpenFeign + Spring Cloud LoadBalancer 的轮询/权重/同机房优先等策略），**Nacos 只负责提供健康实例列表**
+- **选择具体哪个实例** 进行调用由 **客户端侧的负载均衡组件** 决定（例如 OpenFeign + Spring Cloud LoadBalancer 的轮询/权重/同机房优先等策略），**Nacos 只负责提供健康实例列表**
 
 
 
@@ -588,7 +594,7 @@ Spring Cloud 并非一个单一的技术，它也并不是一个框架，而是 
 
 
 
-#### 使用
+#### 如何引入
 
 ##### 1. 引入依赖
 
@@ -596,7 +602,7 @@ Spring Cloud 并非一个单一的技术，它也并不是一个框架，而是 
 
 - nacos 的依赖有两个，我们按需引入，这里的**版本号我们不写**，我们**由前文中引入的BOM进行管理**
 
-  - ”服务注册与发现“依赖：
+  - **”服务注册与发现“**依赖：
 
     - `spring-cloud-starter-alibaba-nacos-discovery`
 
@@ -609,7 +615,7 @@ Spring Cloud 并非一个单一的技术，它也并不是一个框架，而是 
 
       
 
-  - ”配置管理”依赖：
+  - **”配置管理”**依赖：
 
     - `spring-cloud-starter-alibaba-nacos-config`
 
@@ -628,7 +634,7 @@ Spring Cloud 并非一个单一的技术，它也并不是一个框架，而是 
 
 - 我们前面说了，Nacos 的依赖属于**“客户端型依赖”**，它必须连接**外部服务端**才能发挥作用，所以我们还需要**对服务端进行安装**
 
-- 安装方式这里只说两种，**Docker 安装** 和 **Windows 安装**，因为我的电脑是 Windows 哈哈哈
+- 安装方式这里只说两种，**Docker 安装** 和 **Windows 安装**，因为我目前的电脑是 Windows 哈哈哈
 
 
 
@@ -640,7 +646,7 @@ Spring Cloud 并非一个单一的技术，它也并不是一个框架，而是 
 
   - 这是 Nacos 的基础运行模式，所有数据都存在单个 Nacos 实例中
 
-    它**默认使用内置嵌入式数据库（Apache Derby）**，开箱即用、启动最快
+    它 **默认使用内置嵌入式数据库（Apache Derby）**，开箱即用、启动最快
 
     > 这个是默认行为，不过它也**支持改成外部 MySQL**（改 `application.properties`），便于后续平滑迁移到集群
 
@@ -652,7 +658,7 @@ Spring Cloud 并非一个单一的技术，它也并不是一个框架，而是 
 
   - 在生产环境中，为了保证高可用，通常会部署至少3个 Nacos 节点组成一个集群
 
-    这些节点之间会同步数据，通常接入一个**外部、共享的数据库（常用 MySQL）**做统一持久化存储，这是官方生产指引
+    这些节点之间会同步数据，通常接入一个 **外部、共享的数据库（常用 MySQL）**做统一持久化存储，这是官方生产指引
 
     > Nacos 2.x 也支持 **集群内置存储（embedded storage）**，无需 MySQL，但需要显式配置，**不作为主流生产做法**
 
@@ -664,7 +670,8 @@ Spring Cloud 并非一个单一的技术，它也并不是一个框架，而是 
   
   - 确保已经安装好了 Java 8 或 以上的 JDK，并配置好了 `JAVA_HOME` 环境变量
   - 下载一个 Nacos Server，大多数团队现在用 Nacos 2.x，稳妥一点选 `2.2.3` 比较好
-- **单机模式**
+  
+- **⭐单机模式**
 
   1. 打开 `cmd` 之后进入 `nacos\bin`
   2. 执行命令
@@ -673,19 +680,23 @@ Spring Cloud 并非一个单一的技术，它也并不是一个框架，而是 
      # -m standalone 参数明确告诉 Nacos 以单机模式启动
      startup.cmd -m standalone
      ```
+     
+     > nacos 默认是以集群模式启动的，但是如果没有进行配置集群，是会报错的，
+     >
+     > 所以在本地开发时，我们需要手动添加 `-m standalone` 参数，**显式** 指定以 **单机模式** 启动
   3. 执行命令后会展示弹窗
-
+  
   4. 启动日志滚动完成后，浏览器中进入上一步弹窗中显式的网址，进入nacos控制台
-
+  
      - **默认用户名**：`nacos`
      - **默认密码**：`nacos`
-
+  
   5. **如何关闭服务**：在同一个 `cmd` 窗口中按 `Ctrl+C`，或者新开一个 `cmd` 窗口进入 `nacos\bin` 目录，执行 `shutdown.cmd`
 
 
 
 
-- **集群模式**
+- **⭐集群模式**
 
   > 前提：**需要一个可用的 MySQL 数据库 (5.7+ 版本)**
 
@@ -694,218 +705,312 @@ Spring Cloud 并非一个单一的技术，它也并不是一个框架，而是 
     2. 找到 Nacos 解压目录下的 `conf/nacos-mysql.sql` 文件
     3. 将这个 SQL 脚本在 `nacos_config` 数据库中执行，这会创建 Nacos 所需的全部数据表
 
+  
+  
   - **修改 Nacos 配置文件**
-    1. 打开 `nacos\conf` 目录下的 `application.properties` 文件
-    2. 在文件末尾找到关于数据源的配置，**去掉注释**并修改为你的 MySQL 连接信息
-
-
+  
+    所有参与集群的 Nacos 节点都需要修改此文件，将其从默认的嵌入式数据库切换为外部 MySQL
+  
+    - 打开 `nacos\conf\application.properties`
+  
+    - 找到 `Count of DB` 部分，取消注释并修改如下配置：
+  
+      ```properties
+      # 开启外部数据库支持
+      spring.datasource.platform=mysql
+      
+      # 配置数据库数量
+      db.num=1
+      
+      # 配置数据库连接信息 (请根据实际情况修改 url, user, password)
+      # 注意：连接地址后的参数通常是必需的，尤其是时区和字符集
+      db.url.0=jdbc:mysql://127.0.0.1:3306/nacos_config?characterEncoding=utf8&connectTimeout=1000&socketTimeout=3000&autoReconnect=true&useUnicode=true&useSSL=false&serverTimezone=UTC
+      db.user.0=root
+      db.password.0=123456
+      ```
+  
+  
+  
+  - **配置集群节点列表**
+  
+    在 `nacos\conf` 目录下找到 `cluster.conf.example`,将其重命名为 `cluster.conf`
+  
+    > `cluster.conf`:**静态列表**。每一个 Nacos 节点启动时，都会读取这个文件, 让 Nacos 服务端彼此“看见”对方
+  
+    编辑该文件，配置所有节点的 **IP:Port** (每行一个)
+  
+    > **重要提示**：
+    >
+    > 在本地模拟集群时，Nacos 内部通信通常要求使用**真实 IP**
+    >
+    > 请避免使用 `127.0.0.1` 或 `localhost`，请通过 `ipconfig` 查询本机局域网 IP（例如 `192.168.x.x`）
+  
+    ```conf
+    # 格式：IP:端口
+    192.168.31.200:8848
+    192.168.31.200:8858
+    192.168.31.200:8868
+    ```
+  
+  
+  
+  - **部署多节点实例**
+  
+    > 即使是集群模式，Nacos 本身也是一个独立的 Java 进程。在 Windows 本地模拟时，我们需要复制 3 份 Nacos 文件夹来代表 3 个服务器
+  
+    1. 将配置好 `application.properties` 和 `cluster.conf` 的 `nacos` 文件夹完整复制三份
+    2. 分别重命名文件夹为 `nacos-8848`, `nacos-8858`, `nacos-8868` 以示区分
+    3. **关键步骤**：修改后两个文件夹中 `conf/application.properties` 的 `server.port` 属性，防止端口冲突
+       - `nacos-8848` 文件夹：保持 `server.port=8848`
+       - `nacos-8858` 文件夹：修改为 `server.port=8858`
+       - `nacos-8868` 文件夹：修改为 `server.port=8868`
+  
+    
+  
+  - **启动集群**
+  
+    - 分别进入三个文件夹的 `bin` 目录
+  
+    - 打开 `cmd`，执行启动命令：
+  
+      > 注意：此时**不需要** `-m standalone` 参数，因为 Nacos 默认就是以集群模式启动
+  
+      ```cmd
+      startup.cmd
+      ```
+  
+    - 观察三个窗口的日志，当看到 `Nacos started successfully in cluster mode.` 即表示该节点启动成功
+  
+  
+  
+  - **验证与使用**
+    - 访问任意一个节点的控制台（如 `http://192.168.31.200:8848/nacos`）。
+    - 在左侧菜单栏点击 **“集群管理” -> “节点列表”**。
+    - 此时应该能看到 3 个节点的信息（IP和端口），且状态栏均显示为 `UP`
 
 
 
 ###### Docker 版
 
-- 前提：Docker 已安装
+- 前提：Docker 已安装并启动
 
 - **单机模式**
 
   - 输入下面的命令。这条命令会**基于镜像创建并启动一个容器**；如果本机**还没有**这个镜像，Docker 会**先自动拉取**它
 
+    ```bash
+    docker run -d \
+    --name nacos-standalone \
+    -e MODE=standalone \
+    -p 8848:8848 \
+    -p 9848:9848 \
+    -p 9849:9849 \
+    nacos/nacos-server:v2.2.3
     ```
+
+  - **命令参数解析**：
+
+    - `-e MODE=standalone`：**核心参数**
+      - 明确指定以“单机模式”启动。如果不写，Nacos 镜像默认以集群模式启动，在没有配置集群的情况下会报错退出
+    - `-p 8848:8848`：主端口，用于 HTTP 协议（控制台页面、OpenAPI）
+    - `-p 9848:9848`：**Nacos 2.x 新增**，用于客户端 gRPC 通信（必须映射）
+    - `-p 9849:9849`：**Nacos 2.x 新增**，用于节点间 gRPC 通信（必须映射）
+
     
-    ```
+
+  - **查看运行状态**：
+
+    - 查看日志：`docker logs -f nacos-standalone`
+    - 当看到日志输出 `Nacos started successfully in stand alone mode` 时，即表示启动成功。
+    - 访问地址：`http://localhost:8848/nacos` (账号密码默认均为 `nacos`)
+
+
 
 - **集群模式**
+  - 前提：准备好一个可用的 **MySQL (5.7+)** 数据库（可以是容器内的，也可以是外部的），并已导入 `nacos-mysql.sql`
 
 
 
-### Test
+#### 如何使用
 
-#### 1.4. 部署集群模式 (Cluster) - 生产级
+⭐按照之前所说，先引入依赖
 
-在单台 Windows 机器上模拟集群部署稍微复杂，但能帮助你理解其原理。我们将模拟一个三节点的集群。
+##### A. 服务注册与发现
 
-**前提：你需要一个可用的 MySQL 数据库 (5.7+ 版本)。**
+**核心目标**：通过配置和注解，使 Spring Boot 应用在启动时自动向 Nacos Server 发起注册请求，上报自身的 IP、端口和服务名称
 
-1. **数据库初始化**：
+###### **1.修改配置文件 (`application.yml`)**
 
-   - 在你的 MySQL 中创建一个专门给 Nacos 使用的数据库，例如 `nacos_config`。
-   - 找到 Nacos 解压目录下的 `conf/nacos-mysql.sql` 文件。
-   - 使用数据库管理工具（如 Navicat, DataGrip）或命令行，将这个 SQL 脚本在 `nacos_config` 数据库中执行。这会创建 Nacos 所需的全部数据表。
+Nacos 客户端必须知道两件事：**我是谁（服务名）** 和 **我要向谁汇报（服务端地址）**
 
-2. **修改 Nacos 配置文件**：
+```yaml
+server:
+  port: 8081 # 当前服务的端口
 
-   - 打开 `nacos\conf` 目录下的 `application.properties` 文件。
+spring:
+  application:
+    name: order-service # 【关键】服务名称。这是 Nacos 区分不同微服务的唯一标识
+  cloud:
+    nacos:
+      discovery:
+        # Nacos Server 地址
+        # 如果是单机，写 IP:8848
+        # 如果是集群，写 IP1:8848,IP2:8858,IP3:8868
+        server-addr: 127.0.0.1:8848
+```
 
-   - 在文件末尾找到关于数据源的配置，**去掉注释**并修改为你的 MySQL 连接信息：
 
-     ```properties
-     #*************** Config Module Related Configurations ***************#
-     ### If use MySQL as datasource:
-     spring.datasource.platform=mysql
-     
-     ### Count of DB:
-     db.num=1
-     
-     ### Connect URL of DB:
-     db.url.0=jdbc:mysql://127.0.0.1:3306/nacos_config?characterEncoding=utf8&connectTimeout=1000&socketTimeout=3000&autoReconnect=true
-     db.user.0=your_mysql_username
-     db.password.0=your_mysql_password
+
+###### **2.开启客户端功能**
+
+在 Spring Boot 的启动类上添加注解，显式声明开启服务发现功能
+
+> *注：在 Spring Cloud Alibaba 的部分新版本中，此注解已变为可选（Auto-Configuration 会自动生效），但建议显式添加以保证语义清晰*
+
+```java
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+
+@SpringBootApplication
+@EnableDiscoveryClient // 【关键】开启服务发现与注册客户端
+public class OrderApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(OrderApplication.class, args);
+    }
+}
+```
+
+
+
+###### **3.启动与验证**
+
+1. 启动该 Spring Boot 项目
+2. 观察 IDEA 控制台日志，若出现 `[REGISTER-SERVICE] ... register service order-service success` 字样，说明客户端注册逻辑执行成功
+3. 打开浏览器访问 Nacos 控制台（如 `http://127.0.0.1:8848/nacos`）
+4. 点击左侧菜单 **“服务管理” -> “服务列表”**
+5. 若列表中出现了 `order-service`，且 **“实例数”** 显示为 1，**“健康实例数”** 显示为 1，即表示注册成功
+
+
+
+###### **4.服务发现 (即：服务间调用)**
+
+当服务注册成功后，其他微服务可以通过 Nacos 获取该服务的 IP 列表进行调用。 *(此处仅展示最基础的 RestTemplate 整合方式)*
+
+```java
+@Bean
+@LoadBalanced // 【关键】让 RestTemplate 具备通过“服务名”查找 IP 的能力（集成 Ribbon/LoadBalancer）
+public RestTemplate restTemplate() {
+    return new RestTemplate();
+}
+
+// 使用代码：
+// 直接使用服务名 "order-service" 代替具体的 "IP:端口"
+// restTemplate.getForObject("http://order-service/orders/1", String.class);
+```
+
+
+
+##### B. 动态配置管理
+
+**核心目标**：将微服务的配置（如数据库连接、业务开关等）从本地代码中剥离，托管到 Nacos Server，并实现配置修改后服务**无需重启即可实时生效**（热更新）
+
+###### **1.新建引导配置文件 (`bootstrap.yml`)**
+
+**重要原则**：
+
+- Nacos 配置中心的初始化必须发生在 Spring Boot 启动的 **引导阶段**
+
+  因此，必须使用优先级高于 `application.yml` 的 `bootstrap.yml` 文件来配置 Nacos Server 地址
+
+在 `src/main/resources` 目录下新建 `bootstrap.yml`：
+
+```yaml
+spring:
+  application:
+    name: order-service # 【关键】服务名称，对应 Nacos 配置 DataId 的前缀
+  profiles:
+    active: dev # 【关键】当前环境，对应 Nacos 配置 DataId 的后缀
+  cloud:
+    nacos:
+      config:
+        server-addr: 127.0.0.1:8848 # Nacos Server 地址
+        file-extension: yaml # 指定配置文件格式 (yaml/properties)
+```
+
+
+
+###### **2.在 Nacos 控制台创建配置**
+
+Nacos 客户端在启动时，会根据 `bootstrap.yml` 中的信息，按照特定的 **公式** 去 Nacos Server 寻找对应的配置文件
+
+1. **Data ID 匹配规则 (公式)**： `${spring.application.name}-${spring.profiles.active}.${file-extension}`
+
+   - 按照上述 `bootstrap.yml` 的配置，完整 Data ID 为：`order-service-dev.yaml`
+
+2. **创建步骤**：
+
+   - 进入 Nacos 控制台 -> **配置管理** -> **配置列表**
+
+   - 点击右上角 **“+”** 号
+
+   - **Data ID**: 输入 `order-service-dev.yaml`
+
+   - **配置内容**: 输入测试配置，例如：
+
+     ```
+     order:
+       timeout: 3000
+       auto-confirm: false
      ```
 
-3. **配置集群节点列表**：
+   - 点击 **“发布”**
 
-   - 在 `nacos\conf` 目录下，复制 `cluster.conf.example` 并重命名为 `cluster.conf`。
 
-   - 编辑 `cluster.conf` 文件，填入所有 Nacos 节点的 IP 和端口。由于我们在单机上模拟，可以使用不同端口：
 
-     ```conf
-     127.0.0.1:8848
-     127.0.0.1:8849
-     127.0.0.1:8850
-     ```
+###### **3.代码读取与热更新**
 
-4. **启动集群节点**：
+为了验证配置是否加载成功，以及修改后是否能自动刷新，我们需要使用 `@RefreshScope` 注解
 
-   - 要在一台机器上启动多个不同端口的 Nacos 实例，最简单的方法是**复制三份 `nacos` 目录**，例如 `nacos-8848`, `nacos-8849`, `nacos-8850`。
+```java
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-   - **分别修改**每个目录下的 `conf/application.properties` 文件中的 `server.port` 属性，改为对应的端口（8848, 8849, 8850）。
+@RestController
+@RefreshScope // 【核心】此注解赋予该类“动态刷新”的能力。当 Nacos 配置变更时，该类中的属性会被重新注入
+public class ConfigController {
 
-   - **分别打开三个 `cmd` 窗口**，进入各自的 `bin` 目录，执行启动命令（**注意：集群模式不再需要 `-m standalone` 参数**）：
+    @Value("${order.timeout}") // 读取 Nacos 中配置的 order.timeout 属性
+    private String orderTimeout;
 
-     ```bash
-     # 在 nacos-8848\bin 目录下执行
-     startup.cmd
-     
-     # 在 nacos-8849\bin 目录下执行
-     startup.cmd
-     
-     # 在 nacos-8850\bin 目录下执行
-     startup.cmd
-     ```
+    @GetMapping("/config/timeout")
+    public String getTimeout() {
+        return "当前订单超时时间: " + orderTimeout;
+    }
+}
+```
 
-5. **验证**：分别访问 `http://127.0.0.1:8848/nacos`, `http://127.0.0.1:8849/nacos`, `http://127.0.0.1:8850/nacos`。登录后，在左侧菜单“集群管理” -> “节点列表”中，应该能看到所有3个节点，并且状态都是“UP”。
 
-#### 2. Docker 环境安装与部署
 
-**前提：你的机器上已经安装了 Docker 和 Docker Compose。**
+###### **4.验证热更新流程**
 
-##### 2.1. 部署单机模式 (Standalone)
+1. **启动服务**：
 
-使用 Docker 部署单机 Nacos 极其简单
+   - 启动 Spring Boot 应用，观察日志，
 
-1. **拉取镜像**：
+     若看到 `Located property source: [BootstrapPropertySource {name='bootstrapProperties-order-service-dev.yaml'}]`，
 
-   ```bash
-   docker pull nacos/nacos-server
-   ```
+     说明成功加载了 Nacos 配置
 
-2. **启动容器**：
+2. **首次访问**：访问接口 `/config/timeout`，返回 `3000`
 
-   ```bash
-   docker run --name nacos-standalone -d -p 8848:8848 \
-   -e PREFER_HOST_MODE=hostname \
-   -e MODE=standalone \
-   nacos/nacos-server
-   ```
+3. **修改配置**：在 Nacos 控制台中，将 `order.timeout` 的值修改为 `6000`，并点击发布
 
-   - `--name`: 给容器起个名字。
-   - `-d`: 后台运行。
-   - `-p 8848:8848`: 将主机的 8848 端口映射到容器的 8848 端口。
-   - `-e MODE=standalone`: **关键！** 通过环境变量设置启动模式为单机。
+4. **再次访问**：**不重启服务**，直接再次访问接口
 
-3. **验证**：同样是访问 `http://127.0.0.1:8848/nacos`，使用 `nacos/nacos` 登录。
-
-##### 2.2. 部署集群模式 (Cluster) - 使用 Docker Compose
-
-这是在 Docker 环境下部署集群的最佳实践，它能轻松地编排 MySQL 和多个 Nacos 节点。
-
-1. **创建 `docker-compose.yml` 文件**： 在你喜欢的工作目录下，创建一个名为 `docker-compose.yml` 的文件，并填入以下内容。**请根据注释修改 MySQL 的密码**。
-
-   ```dockerfile
-   version: "3.8"
-   services:
-     mysql:
-       image: mysql:5.7
-       container_name: nacos-mysql
-       environment:
-         - MYSQL_ROOT_PASSWORD=your_password # !! 修改为你自己的密码
-         - MYSQL_DATABASE=nacos_config
-       volumes:
-         - ./mysql-data:/var/lib/mysql
-       ports:
-         - "33066:3306" # 将主机的33066端口映射到容器的3306
-   
-     nacos1:
-       image: nacos/nacos-server
-       container_name: nacos1
-       depends_on:
-         - mysql
-       ports:
-         - "8848:8848"
-         - "9848:9848" # 集群间通信端口
-       environment:
-         - PREFER_HOST_MODE=hostname
-         - MODE=cluster
-         - SPRING_DATASOURCE_PLATFORM=mysql
-         - MYSQL_SERVICE_HOST=mysql
-         - MYSQL_SERVICE_PORT=3306
-         - MYSQL_SERVICE_DB_NAME=nacos_config
-         - MYSQL_SERVICE_USER=root
-         - MYSQL_SERVICE_PASSWORD=your_password # !! 和上面MySQL的密码保持一致
-         - NACOS_SERVERS=nacos1:8848,nacos2:8848,nacos3:8848 # 集群节点列表
-   
-     nacos2:
-       image: nacos/nacos-server
-       container_name: nacos2
-       depends_on:
-         - mysql
-       ports:
-         - "8849:8848"
-         - "9849:9848"
-       environment:
-         - PREFER_HOST_MODE=hostname
-         - MODE=cluster
-         - SPRING_DATASOURCE_PLATFORM=mysql
-         - MYSQL_SERVICE_HOST=mysql
-         - MYSQL_SERVICE_PORT=3306
-         - MYSQL_SERVICE_DB_NAME=nacos_config
-         - MYSQL_SERVICE_USER=root
-         - MYSQL_SERVICE_PASSWORD=your_password # !! 和上面MySQL的密码保持一致
-         - NACOS_SERVERS=nacos1:8848,nacos2:8848,nacos3:8848
-   
-     nacos3:
-       image: nacos/nacos-server
-       container_name: nacos3
-       depends_on:
-         - mysql
-       ports:
-         - "8850:8848"
-         - "9850:9848"
-       environment:
-         - PREFER_HOST_MODE=hostname
-         - MODE=cluster
-         - SPRING_DATASOURCE_PLATFORM=mysql
-         - MYSQL_SERVICE_HOST=mysql
-         - MYSQL_SERVICE_PORT=3306
-         - MYSQL_SERVICE_DB_NAME=nacos_config
-         - MYSQL_SERVICE_USER=root
-         - MYSQL_SERVICE_PASSWORD=your_password # !! 和上面MySQL的密码保持一致
-         - NACOS_SERVERS=nacos1:8848,nacos2:8848,nacos3:8848
-   ```
-
-2. **执行数据库初始化脚本**： 由于 Docker 容器内的 Nacos 首次启动时不会自动创建表，我们需要手动执行。
-
-   - 先只启动 MySQL：`docker-compose up -d mysql`
-   - 下载 `nacos-mysql.sql` 脚本（可以从解压的 Nacos 包 `conf` 目录中找到）。
-   - 使用数据库工具连接到 `localhost:33066`，用户 `root`，密码为你设置的密码，然后在 `nacos_config` 库中执行脚本。
-
-3. **启动整个集群**： 在 `docker-compose.yml` 文件所在的目录下，执行：
-
-   ```
-   docker-compose up -d
-   ```
-
-4. **验证**：等待所有容器启动完成后，分别访问 `http://localhost:8848/nacos`, `http://localhost:8849/nacos`, `http://localhost:8850/nacos`。登录后查看集群节点列表，确认所有节点都已正常启动。
+5. **结果验证**：若返回 `6000`，则说明动态配置管理及热更新功能生效
 
 
 

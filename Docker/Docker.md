@@ -3304,7 +3304,7 @@ docker container ls		或		docker ps
 
 #### 启动已停止的容器
 
-```cmd
+```bash
 docker container start [选项] 容器ID或容器名 [容器ID或容器名...]		
 或
 docker start [选项] 容器ID或容器名 [容器ID或容器名...]
