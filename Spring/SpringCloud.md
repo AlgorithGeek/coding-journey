@@ -1590,6 +1590,12 @@ logging:
 
 
 
+## API网关
+
+gatway
+
+
+
 ## 负载均衡
 
 LoadBalancer
@@ -1601,10 +1607,6 @@ LoadBalancer
 Sentinel 
 
 
-
-## API网关
-
-gatway
 
 
 
