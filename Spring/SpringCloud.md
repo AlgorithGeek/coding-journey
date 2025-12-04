@@ -1592,7 +1592,1165 @@ logging:
 
 ## API网关
 
-gatway
+### Gateway
+
+#### 1. 为什么需要网关?
+
+在微服务架构中，后端服务往往会被拆分成多个微小的服务（如订单服务、用户服务、库存服务）。如果没有网关，客户端（App、Web、小程序）需要直接与各个微服务进行交互，会产生严重的耦合与安全隐患。
+
+网关主要解决以下四个核心问题：
+
+- **统一接入**
+  - **问题**：后端服务（如订单、用户、库存）的IP和端口可能动态变化，且数量众多
+  - **解决**：客户端只需连接唯一的网关地址，由网关根据路由规则反向代理到具体的后端服务
+- **解耦与抽象**
+  - **问题**：客户端（Web/Mobile）往往需要根据业务聚合多个服务的数据，直接调用会导致客户端逻辑复杂
+  - **解决**：网关屏蔽了后端微服务的拆分细节，客户端无需感知微服务的具体存在
+- **横切关注点统一处理**
+  - **问题**：鉴权（Auth）、限流（Rate Limiting）、日志（Logging）、跨域（CORS）是每个服务都需要的通用逻辑。如果在每个微服务中重复实现，会导致代码冗余且维护困难
+  - **解决**：将这些逻辑下沉到网关层统一实现（AOP思想），微服务只需专注于业务逻辑
+- **安全防护**
+  - **问题**：核心业务接口直接暴露在公网极其危险
+  - **解决**：网关作为隔离层，隐藏内部服务架构，仅暴露必要的API
+
+**Spring Cloud Gateway** 的出现就是为了解决这些问题。它是整个微服务系统的 **统一入口**，负责接收所有请求，并根据规则转发到目标服务
+
+
+
+#### 2. 架构与技术栈
+
+Spring Cloud Gateway 是 Spring 官方推出的第二代网关框架，其底层架构与传统Servlet容器有本质区别
+
+
+
+##### a. 核心技术栈组成
+
+Spring Cloud Gateway 的高性能源于其底层的 **响应式编程**模型。它的技术栈由下至上包含：
+
+- **Netty**：底层网络通信框架。不同于 Tomcat 的“一线程一请求”同步阻塞模型，Netty 基于 NIO（非阻塞 I/O），能够使用少量线程处理海量并发连接
+- **Project Reactor**：Spring 的反应式编程库，实现了 Reactive Streams 规范，提供了 `Mono` 和 `Flux` 异步序列流
+- **Spring WebFlux**：Spring 5.0 推出的非阻塞 Web 框架，它是 Gateway 的运行基础
+
+
+
+##### b. 阻塞与非阻塞的区别（技术原理）
+
+- **传统架构 (Spring MVC)**：
+
+  - 基于 **Servlet API**
+
+    当请求进入时，线程会被阻塞，直到业务处理完成（如等待数据库查询）。在高并发下，线程池容易耗尽，导致系统崩溃
+
+- **Gateway 架构**：
+
+  - 基于 **WebFlux**
+
+    采用**异步非阻塞**模型。当涉及 I/O 操作时，线程不会等待，而是通过回调或事件驱动机制处理后续逻辑
+
+    这使得 Gateway 能够以极低的资源消耗处理高吞吐量请求
+
+
+
+##### c. 环境搭建与依赖管理
+
+###### 核心依赖坐标
+
+在构建网关服务时，核心依赖为 `spring-cloud-starter-gateway`
+
+
+
+###### **依赖说明**
+
+| Group ID                    | Artifact ID                    | 作用                                                         |
+| --------------------------- | ------------------------------ | ------------------------------------------------------------ |
+| `org.springframework.cloud` | `spring-cloud-starter-gateway` | 引入 Gateway 核心功能，自动包含 `spring-boot-starter-webflux` 和 `Netty` |
+
+
+
+###### **Maven 坐标**
+
+```xml
+<dependencies>
+    <!-- Gateway 核心依赖 -->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-gateway</artifactId>
+    </dependency>
+    
+    <!-- 服务注册中心依赖（Gateway 通常配合 Nacos 或 Eureka 等使用） -->
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+    </dependency>
+</dependencies>
+```
+
+
+
+##### d. Servlet 与 WebFlux 的兼容性冲突
+
+###### **1. 场景描述**
+
+- 你创建了一个新的 Spring Boot 模块作为网关，习惯性地引入了 `spring-boot-starter-web`，或者你的父工程（Parent POM）默认引入了该依赖
+
+
+
+###### 2. 异常现象
+
+启动应用时，当项目中存在依赖冲突时，会抛出如下异常：
+
+```cmd
+Description:
+Spring MVC found on classpath, which is incompatible with Spring Cloud Gateway.
+
+Action:
+Please include spring-boot-starter-webflux or remove spring-boot-starter-web.
+```
+
+
+
+###### 3. 根本原因
+
+Spring Cloud Gateway 基于 **WebFlux**，而 `spring-boot-starter-web` 基于 **Spring MVC**。 这两者在同一个应用中是 **互斥** 的，不能共存
+
+> Spring Boot 在启动时会进行自动配置
+>
+> 如果 Classpath 中检测到 `spring-boot-starter-web`，它会尝试初始化 Servlet 容器（Tomcat）
+> 而 Gateway 强依赖于 WebFlux 环境，**两者无法在同一个 Spring Boot 应用中共存**
+
+
+
+###### 4. 解决方式
+
+在 Gateway 模块的 `pom.xml` 中，**绝对不要**引入 `spring-boot-starter-web`
+
+如果你的父工程为了方便统一管理，全局引入了 `spring-boot-starter-web`，那么你必须在 Gateway 模块中 **显式地** 将其 **排除**
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-web</artifactId>
+    <!-- 显式排除导致冲突的传递依赖 -->
+    <exclusions>
+        <!-- 1. 排除内嵌的 Tomcat 容器 -->
+        <exclusion>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-tomcat</artifactId>
+        </exclusion>
+        <!-- 2. 排除 Spring MVC 框架 -->
+        <exclusion>
+            <groupId>org.springframework.web</groupId>
+            <artifactId>spring-webmvc</artifactId>
+        </exclusion>
+    </exclusions>
+</dependency>
+```
+
+
+
+
+
+#### 3. 核心概念
+
+Spring Cloud Gateway 的处理流程完全围绕着 **“路由”** 这一核心概念构建，最重要的三个术语：**路由、断言、过滤器**
+
+
+
+$$\text{Route (路由)} = \text{ID (唯一标识)} + \text{URI (目的地)} + \underbrace{\text{Predicates (断言集合)}}_{\text{判断条件}} + \underbrace{\text{Filters (过滤器集合)}}_{\text{处理逻辑}}$$
+
+
+
+##### a. Route (路由)
+
+这是网关的基本构建模块。本质上就是一条 **“转发规则”**
+
+- 一个路由由以下几部分组成：
+
+  - **ID**：路由的唯一标识符（String类型）。建议使用具有业务含义的名称（如 `order_service_route`），便于日志追踪和管理
+
+  - **URI**：请求最终要被转发到的目标地址
+    - **Http 方式**：`http://localhost:8080` (直接指向特定地址)
+  
+    - **LoadBalancer 方式**：`lb://service-name` (指向服务注册中心的服务名，启用负载均衡)
+  
+  - **Predicate (断言)**：一组匹配规则（比如：路径是 `/order` 开头的请求才转发）
+  
+  - **Filter (过滤器)**：在请求发送前或响应返回后，对数据进行修改的处理链
+
+
+
+##### b. Predicate (断言)
+
+> 一定在路由内部
+
+###### 技术定义
+
+- Predicate 是 Java 8 `java.util.function.Predicate<T>` 的一种实现
+
+  在 Gateway 中，输入参数 `T` 是 `ServerWebExchange`（封装了 HTTP 请求和响应的上下文对象）
+
+  - **接口定义(简化版)**:
+
+    ```java
+    @FunctionalInterface
+    public interface Predicate<T> {
+        // 评估输入参数，返回 true (匹配) 或 false (不匹配)
+        boolean test(T t);
+    }
+    ```
+
+
+
+###### 作用与行为
+
+- **匹配逻辑**：开发人员通过 Predicate 匹配 HTTP 请求的各种属性（Request Path, Method, Header, Host, Cookie, Query Param 等）
+- **逻辑组合**：一个路由可以定义多个 Predicate，它们之间默认是 **AND (逻辑与)** 的关系。只有当所有断言都返回 `true` 时，该路由才会被匹配
+
+
+
+###### 常用断言工厂
+
+Spring Cloud Gateway 内置了许多工厂类来生成断言，以下是开发中最常用的几种：
+
+| 断言工厂   | 说明                 | 示例配置                                           |
+| ---------- | -------------------- | -------------------------------------------------- |
+| **Path**   | 匹配请求路径         | `- Path=/order/**`                                 |
+| **Method** | 匹配 HTTP 方法       | `- Method=GET,POST`                                |
+| **After**  | 在指定时间之后       | `- After=2025-01-01T00:00:00+08:00[Asia/Shanghai]` |
+| **Header** | 匹配请求头(支持正则) | `- Header=X-Request-Id, \d+`                       |
+| **Query**  | 匹配请求参数         | `- Query=token` (是否有token参数)                  |
+
+
+
+##### c. Filter (过滤器)
+
+###### 技术定义
+
+- Filter 是 Gateway 处理请求和响应的核心逻辑组件
+
+  - **作用**：在请求被路由之前（Pre）或之后（Post）修改请求和响应
+
+  - **场景**：添加请求头、记录日志、鉴权、限流等
+
+
+
+###### 生命周期
+
+从逻辑上我们将其分为两个阶段：
+
+1. **Pre Filter (前置处理)**：
+
+   - **执行时机**：请求被路由匹配成功后，发送给目标服务 **之前**
+
+   - **常见作用**：参数校验、权限校验、流量监控、日志埋点、修改请求头
+
+     
+
+2. **Post Filter (后置处理)**：
+
+   - **执行时机**：目标服务处理完毕，响应返回给网关 **之后**，再返回给客户端之前
+   - **常见作用**：修改响应头、修改响应体、统计请求耗时、统一异常处理
+
+
+
+###### 过滤器分类
+
+- **GatewayFilter (局部过滤器)**：只作用于当前配置的 **特定路由**
+- **GlobalFilter (全局过滤器)**：不需要在配置文件中显式配置，作用于 **所有路由**（如全局鉴权、全局LoadBalancer）
+
+
+
+##### ee. 配置方式
+
+- 配置 Gateway 有两种主流方式：**YAML 配置文件**（常用）和 **Java Fluent API**（灵活，适合动态配置）
+
+###### 方式一：YAML 配置（推荐，声明式）
+
+这是最直观的配置方式，易于阅读和维护
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: payment_route               # 1. 路由 ID
+          uri: http://localhost:8001      # 2. 目标 URI
+          predicates:                     # 3. 断言集合 (AND关系)
+            - Path=/payment/** # 匹配路径
+            - Method=GET                  # 且必须是 GET 请求
+          filters:                        # 4. 过滤器集合
+            - AddRequestHeader=X-Source, Gateway # 添加请求头
+            - StripPrefix=1               # 去除路径前缀的第一部分
+```
+
+
+
+###### 方式二：Java Fluent API（编程式）
+
+这种方式通常用于需要根据代码逻辑动态构建路由的场景
+
+**核心类：`RouteLocatorBuilder`**
+
+- **作用**：用于构建 `RouteLocator` Bean，定义路由规则
+- **常用方法**：
+  - `routes()`: 开始构建路由流
+  - `route(id, fn)`: 定义单个路由，`fn` 是一个函数式接口，用于配置 Predicate 和 Filter
+  - `path(String)`: 定义路径断言
+  - `uri(String)`: 定义目标 URI
+  - `filters(fn)`: 定义过滤器链
+
+**代码示例：**
+
+```java
+@Configuration
+public class GatewayConfig {
+
+    @Bean
+    public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
+        return builder.routes()
+            .route("code_route", r -> r
+                // 1. 断言：匹配路径 /guonei
+                .path("/guonei")
+                // 2. 过滤器：添加参数 name=test
+                .filters(f -> f.addRequestParameter("name", "test"))
+                // 3. 目标 URI
+                .uri("[http://news.baidu.com/guonei](http://news.baidu.com/guonei)")
+            )
+            .build();
+    }
+}
+```
+
+
+
+#### 4. 快速上手：Hello World
+
+- 我们通过一个简单的需求来体验 Gateway 的配置：**当用户访问网关的 `/guonei` 路径时，自动跳转到百度新闻国内版**
+
+##### 方式一：YAML 配置（推荐，生产主流）
+
+在 Spring Cloud 开发中，**约定大于配置**。我们首选 `application.yml` 来管理路由，因为它支持动态刷新，且运维人员无需修改代码即可调整规则
+
+**配置示例：**
+
+```yaml
+server:
+  port: 9527 # 网关服务端口
+
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: baidu_news_route           # 1. 路由 ID (唯一标识)
+          uri: [http://news.baidu.com](http://news.baidu.com)     # 2. 目标 URI (最终要去的地方)
+          predicates:
+            - Path=/guonei/** 				# 3. 断言 (匹配规则)
+```
+
+**测试效果：** 访问 `http://localhost:9527/guonei`，网关会匹配到 `baidu_news_route`，并将请求转发给百度新闻。
+
+
+
+##### 方式二：Java Fluent API（编程式）
+
+虽然 YAML 是主流，但在某些需要 **动态构建路由** 或 **复杂逻辑判断** 的场景下，Java API 非常有用
+
+**核心类：`RouteLocatorBuilder`** Spring Boot 会自动注入这个构建器，可以通过链式调用来定义路由
+
+**代码示例：**
+
+```java
+@Configuration
+public class GatewayConfig {
+
+    /**
+     * 编程式路由配置
+     * @param builder 由 Spring 容器自动注入
+     * @return RouteLocator 路由规则定位器
+     */
+    @Bean
+    public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
+        return builder.routes()
+            // 定义一条路由，ID 为 "path_route_baidu"
+            .route("path_route_baidu", r -> r
+                // 1. 断言：路径匹配 /guonei
+                .path("/guonei")
+                // 2. 目标：转发地址
+                .uri("[http://news.baidu.com/guonei](http://news.baidu.com/guonei)")
+            )
+            // .route(...) 可以继续链式添加其他路由
+            .build();
+    }
+}
+```
+
+**实战建议**：初学者请专注掌握 **YAML 配置**。Java API 通常用于开发自定义的路由管理后台
+
+
+
+#### 5. 路由断言
+
+在 Spring Cloud Gateway 中，**Predicate (断言)** 是决定请求“去向”的核心判断逻辑
+
+- 在 YAML 配置中，`predicates` 下面的每一行（如 `- Path=/abc`）其实都对应着一个 Spring 内置的 **Factory 类**
+
+  它们负责提取 HTTP 请求的各种属性（如发送时间、Cookie、Header、Host 等），并与配置的规则进行匹配
+
+
+
+##### a. 核心逻辑：逻辑与 (AND)
+
+一个路由可以配置多个断言，它们之间默认是 **AND (逻辑与)** 的关系
+
+> **规则**：只有当配置的 **所有** 断言都返回 `True` 时，该路由才算匹配成功，请求才会被转发
+
+如果任何一个断言失败，网关会忽略该路由，继续尝试匹配列表中的下一个路由
+
+
+
+##### b. 时间类断言
+
+这类断言通常用于 **秒杀**、**预售**、**维护期** 或 **限时活动** 等对时间敏感的场景
+
+| 断言类型    | 作用                       | 场景示例                                   |
+| ----------- | -------------------------- | ------------------------------------------ |
+| **After**   | 在指定时间 **之后** 生效   | 2025年双11零点开始抢购，之前的请求会被拒绝 |
+| **Before**  | 在指定时间 **之前** 生效   | 优惠券领取截止时间，过期后路由失效         |
+| **Between** | 在指定时间段 **之间** 生效 | 仅在活动期间（如 1号到 3号）开放入口       |
+
+
+
+**YAML 配置示例：**
+
+```yaml
+predicates:
+  # 只有在 2025年1月1日 凌晨1点之后，这个接口才通
+  - After=2025-01-01T01:00:00.000+08:00[Asia/Shanghai]
+```
+
+
+
+**🚨 预警：时间格式**
+
+Gateway 对配置中的时间字符串格式要求极其严格，必须遵循 **Java 8 ZonedDateTime (ISO-8601)** 标准，包含时区信息
+
+- ❌ **错误写法**：`2025-01-01 01:00:00` (常见错误，启动直接报错)
+- ✅ **正确写法**：`2025-01-01T01:00:00.000+08:00[Asia/Shanghai]`
+
+**最佳实践：如何获取这个字符串？** 千万不要手写！请运行下面这段简单的 Java 代码，复制控制台的输出结果：
+
+```java
+public class TimeUtils {
+    public static void main(String[] args) {
+        // 获取当前时区的标准格式时间字符串
+        System.out.println(java.time.ZonedDateTime.now());
+        // 输出示例：2023-11-23T15:30:11.456+08:00[Asia/Shanghai]
+    }
+}
+```
+
+
+
+##### c. 请求属性类断言
+
+这类断言用于提取 HTTP 请求的特征进行精细化路由，常用于 **灰度发布 (Canary Release)**、**API 版本控制** 或 **特定来源限制**
+
+| 断言工厂   | 说明           | 示例配置                                        |
+| ---------- | -------------- | ----------------------------------------------- |
+| **Header** | 检查请求头     | `- Header=X-Request-Id, \d+` (Value 必须是数字) |
+| **Cookie** | 检查 Cookie    | `- Cookie=userType, vip` (必须包含 vip cookie)  |
+| **Method** | 检查 HTTP 方法 | `- Method=GET,POST` (限制请求动作)              |
+| **Host**   | 检查 Host 域名 | `- Host=**.baidu.com` (支持 Ant 风格通配符)     |
+
+
+
+**🚨 陷阱预警：正则匹配**
+
+`Header` 和 `Cookie` 断言接收两个参数：`key` 和 `regexp` (正则表达式)
+
+- **场景**：你想匹配 Header 中 `X-Name` 包含 "admin" 的请求
+- **错误配置**：`- Header=X-Name, admin`
+  - *原因*：这表示值必须**完全等于** "admin"
+- **正确配置**：`- Header=X-Name, .*admin.*`
+  - *原因*：第二个参数是正则，`.*` 表示匹配任意字符
+
+
+
+##### d. 参数类断言
+
+用于检查 URL 中的查询参数
+
+**YAML 配置示例：**
+
+```yaml
+predicates:
+  # 1. 简单匹配：请求必须包含名为 token 的参数 (例如 /api?token=123)
+  - Query=token
+  
+  # 2. 值匹配：参数值必须满足正则表达式
+  # 要求：token 参数的值必须以 jwt 开头
+  # - Query=token, jwt.*
+```
+
+
+
+##### ee. 实战演练：组合拳
+
+假设我们有一个“新版本内测服务”，准入规则极其严格，必须 **同时满足** 以下 3 点：
+
+1. **时间限制**：必须在 2024 年之后
+2. **路径限制**：访问路径以 `/beta` 开头
+3. **身份限制**：请求头必须携带 `X-Beta-Test: true`
+
+**Application.yml 完整配置：**
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: beta_service_route
+          uri: http://localhost:8088
+          predicates:
+            # 多个断言同时存在，必须全部满足 (AND 关系)
+            - Path=/beta/**
+            - After=2024-01-01T00:00:00.000+08:00[Asia/Shanghai]
+            - Header=X-Beta-Test, true
+```
+
+**测试结果分析：**
+
+- **场景 A**：`curl http://gateway/beta/api`
+
+  - **结果**：❌ **404 Not Found**
+  - **原因**：虽然路径和时间满足，但缺少必要的 Header，断言链匹配失败
+
+  
+
+- **场景 B**：`curl -H "X-Beta-Test: true" http://gateway/beta/api`
+
+  - **结果**：✅ **200 OK**
+  - **原因**：所有条件均满足，请求成功转发至 `localhost:8088`
+
+
+
+#### 6. 过滤器与自定义逻辑
+
+在 Spring Cloud Gateway 中，**Filter (过滤器)** 负责对请求和响应进行“加工”。所有的过滤器都遵循 **责任链模式**，请求在链条中依次传递
+
+##### a. 过滤器的生命周期
+
+虽然在代码层面是一个链条，但在逻辑上，我们通常将过滤器分为两个阶段：
+
+- **Pre (前置处理)**：
+  - **时机**：请求被路由匹配成功，但转发给下游服务 **之前**
+  - **作用**：参数校验、鉴权 (Auth)、限流、修改请求头、重写路径
+- **Post (后置处理)**：
+  - **时机**：下游微服务返回响应 **之后**，网关将响应发回给客户端之前
+  - **作用**：修改响应头、统计接口耗时、统一异常处理、日志记录
+
+
+
+##### b. 内置过滤器
+
+Spring Cloud Gateway 内置了 30 多种过滤器工厂，用于通过 YAML 配置快速修改请求。其中最常用的是 **Header 处理** 和 **Path 处理**
+
+###### 请求头处理
+
+用于向发送给微服务的请求中追加特定的 Header（例如来源标识）
+
+**YAML 配置：**
+
+```yaml
+filters:
+  # 格式：AddRequestHeader=Key, Value
+  - AddRequestHeader=X-Request-Source, Gateway
+```
+
+
+
+###### 路径处理 (StripPrefix)⭐
+
+这是微服务网关中最常用的过滤器，也是初学者最容易踩坑的地方
+
+- **场景**：前端为了区分服务，请求地址通常包含服务名前缀（如 `/order-service/create`），但后端微服务的真实接口路径往往不包含该前缀（如 `/create`）
+- **作用**：在转发前，从请求路径中 **截断** 指定数量的层级
+
+
+
+**原理图解：**
+
+假设配置为 `StripPrefix=1`：
+
+| 客户端请求 Path | 过滤器操作             | 最终转发给微服务的 Path |
+| --------------- | ---------------------- | ----------------------- |
+| `/order/create` | 去掉第 1 层 (`/order`) | `/create`               |
+| `/a/b/c`        | 去掉第 1 层 (`/a`)     | `/b/c`                  |
+
+**配置实战：**
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: order_route
+          uri: http://localhost:8002
+          predicates:
+            # 1. 匹配以 /order-service 开头的路径
+            - Path=/order-service/**
+          filters:
+            # 2. 截断第 1 层前缀，否则微服务会报 404
+            - StripPrefix=1
+```
+
+**🚨 巨坑预警：** `StripPrefix` 是按 **"/" 分隔的层级** 计数的，不是按字符数
+
+- 如果配置 `StripPrefix=2`，访问 `/a/b/c` 会变成 `/c`
+- 如果路径层级不够切（例如访问 `/a` 却配置了 `StripPrefix=2`），通常会导致转发异常
+
+
+
+##### c. 自定义全局过滤器
+
+- 虽然 YAML 配置方便，但复杂的业务逻辑（如 **统一鉴权**、**黑名单校验**）必须通过 Java 代码实现
+
+- 要实现一个全局过滤器，必须实现 `GlobalFilter` 和 `Ordered` 这两个接口
+
+
+
+###### `GlobalFilter` 接口
+
+```java
+public interface GlobalFilter {
+    /**
+     * @param exchange  网关上下文（包含 Request 和 Response）
+     * @param chain     过滤器链（用于放行请求到下一个环节）
+     * @return Mono<Void>  代表一个异步任务
+     */
+    Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain);
+}
+```
+
+**关键对象说明：**
+
+1. **`ServerWebExchange`**：这是 WebFlux 的核心容器，替代了 Servlet 中的 `HttpServletRequest` 和 `HttpServletResponse`
+   - 获取请求：`exchange.getRequest()`
+   - 获取响应：`exchange.getResponse()`
+   - 共享数据：`exchange.getAttributes()` (用于在过滤器之间传递数据)
+2. **`Mono<Void>`**：Reactor 编程模型的返回值。网关是 **异步非阻塞** 的，这个返回值告诉框架：“我的任务还没做完（或者做完了）”，框架会订阅这个任务
+
+
+
+###### `Ordered` 接口
+
+```java
+public interface Ordered {
+    int getOrder();
+}
+```
+
+- **作用**：决定过滤器的执行顺序
+- **规则**：数字越 **小**，优先级越 **高**
+  - **Pre 阶段**：Order 小的先执行
+  - **Post 阶段**：Order 小的后执行（类似于栈的“先进后出”）
+
+
+
+###### 实战场景1：统一鉴权过滤器
+
+**场景**：在请求转发给微服务之前，拦截所有请求，检查 Header 中是否包含合法的 Token
+
+```java
+@Component
+public class AuthGlobalFilter implements GlobalFilter, Ordered {
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        // 1. 获取 Request 对象
+        ServerHttpRequest request = exchange.getRequest();
+
+        // 2. 获取 Header 中的 Token
+        String token = request.getHeaders().getFirst("Authorization");
+
+        // 3. 校验逻辑 (模拟)
+        if (token == null || token.isEmpty()) {
+            System.out.println("❌ 鉴权失败：未携带 Token");
+            
+            // 4. 拒绝请求逻辑
+            ServerHttpResponse response = exchange.getResponse();
+            response.setStatusCode(HttpStatus.UNAUTHORIZED); // 设置 401 状态码
+            
+            // 5. 【关键】直接结束请求，不再向下传递
+            return response.setComplete();
+        }
+
+        // 6. 放行逻辑
+        System.out.println("✅ 鉴权成功");
+        // 将请求交给链条中的下一个过滤器
+        return chain.filter(exchange);
+    }
+
+    @Override
+    public int getOrder() {
+        // 设置为 -1，保证在大多数系统过滤器之前执行
+        return -1;
+    }
+}
+```
+
+
+
+###### 实战场景2：接口耗时统计
+
+- **场景**：我们需要统计每个请求从进入网关到微服务返回响应，总共花费了多少时间，并打印日志。这就需要用到 **Post（后置）** 逻辑
+
+- **难点**：WebFlux 中没有显式的 "return" 后的代码块，必须使用 `.then()` 方法
+
+**代码实现：**
+
+```java
+@Component
+public class ExecutionTimeFilter implements GlobalFilter, Ordered {
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        // --- Pre 阶段 (请求发出去之前) ---
+        
+        // 1. 记录开始时间
+        long startTime = System.currentTimeMillis();
+        
+        // 2. 放行，并定义 "回来之后" 要做的事
+        return chain.filter(exchange).then(
+            // --- Post 阶段 (微服务响应回来之后) ---
+            Mono.fromRunnable(() -> {
+                long endTime = System.currentTimeMillis();
+                long executeTime = endTime - startTime;
+                
+                // 获取请求路径
+                String path = exchange.getRequest().getURI().getPath();
+                
+                System.out.println("📊 接口 [" + path + "] 耗时: " + executeTime + "ms");
+            })
+        );
+    }
+
+    @Override
+    public int getOrder() {
+        // 这里的 Order 设定很有讲究
+        // Order 越小，Pre 越先执行，Post 越后执行
+        // 放在最外层包裹，才能统计到最完整的耗时
+        return -100;
+    }
+}
+```
+
+**原理图解 (责任链的回调)：**
+
+```
+Filter A (Order -100) -> Pre逻辑: 记录开始时间
+    Filter B (Order -1) -> Pre逻辑: 鉴权
+        ... 转发给微服务 ...
+    Filter B (Order -1) -> Post逻辑 (无)
+Filter A (Order -100) -> Post逻辑: 计算结束时间 (then)
+```
+
+
+
+###### 实际开发中的“巨坑”指南
+
+**坑一：千万别用 Thread.sleep()**
+
+- **错误示范**：
+
+  ```java
+  // ❌ 绝对禁止！！
+  Thread.sleep(1000); 
+  ```
+
+
+
+- **后果**：
+
+  - Spring Cloud Gateway 底层是 Netty，默认只有 CPU 核数个线程（IO 线程）
+
+    如果你让线程睡眠，整个网关的处理能力会瞬间归零，所有请求都会卡死
+
+    
+
+- **正确做法**：如果需要模拟延迟，使用 Reactor 的 API：
+
+  ```java
+  // ✅ 正确做法
+  return Mono.delay(Duration.ofSeconds(1)).then(chain.filter(exchange));
+  ```
+
+
+
+**坑二：DataBuffer 的读写问题**
+
+- 如果你想在过滤器中 **读取 Request Body（请求体）** 或 **修改 Response Body（响应体）**，这在 WebFlux 中非常复杂
+
+  - 因为 Body 是数据流（Flux），可能分多次传输
+
+    一旦你读取了流，流就断了，后续的服务就读不到了
+
+- **最佳实践**：尽量避免在全局过滤器中读取 Body。如果必须读取（如验签），建议使用 Spring Cloud Gateway 提供的高级工厂 `ModifyRequestBodyGatewayFilterFactory`，不要自己手写
+
+
+
+**坑三：Order 的优先级冲突**
+
+- 如果你发现鉴权过滤器没生效，或者 Header 没加上，检查一下 `getOrder()` 的返回值
+- 系统内置的过滤器 Order 通常在 `0` 到 `20000` 之间，或者非常小
+- **建议**：自定义的安全类过滤器，Order 设为负数（如 -1, -10），确保最先执行
+
+
+
+#### 7. 微服务整合与动态路由
+
+在之前的章节中，我们的路由配置是写死 IP 的（如 `http://localhost:8001`）
+
+- 这种 **静态路由** 在微服务架构中是不可接受的，因为微服务的 IP 是动态变化的，且会有多个实例
+
+  我们将让 Gateway 与 **Nacos** 整合，实现基于服务名的 **动态路由** 和 **负载均衡**
+
+
+
+##### a. 核心架构：LB 协议与负载均衡
+
+Gateway 提供了一个特殊的协议头：**`lb://` (Load Balance)**
+
+- **旧写法**：`http://localhost:8001` (直连，单点，死板)
+- **新写法**：`lb://product-service` (走注册中心，负载均衡，灵活)
+
+
+
+**工作原理**： 当 Gateway 解析到 `lb://` 开头时，它会调用内置的 `LoadBalancerClient`：
+
+1. 去注册中心（Nacos）查找 `product-service` 的所有健康实例列表
+2. 根据算法（默认轮询）选择一个实例 IP
+3. 将请求转发过去
+
+
+
+##### b. 环境搭建与依赖陷阱
+
+要使用动态路由，必须引入服务发现组件和负载均衡器
+
+引入依赖 (pom.xml)
+
+**🚨 巨坑预警：Missing LoadBalancer** 
+
+- 从 Spring Cloud 2020 (Ilford) 版本开始，官方移除了 `Ribbon`
+
+- 如果你只引入了 Nacos，启动时不会报错，但访问 `lb://` 时会报 `503 Service Unavailable` 或 `Unable to find instance`
+
+**最佳实践:手动显式引入 LoadBalancer：**
+
+```xml
+<dependencies>
+    <!-- 1. Nacos 服务发现 -->
+    <dependency>
+        <groupId>com.alibaba.cloud</groupId>
+        <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+    </dependency>
+
+    <!-- 2. 【关键】Spring Cloud 负载均衡器 (替代 Ribbon) -->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+    </dependency>
+</dependencies>
+```
+
+
+
+##### c. 实战：手动配置动态路由 (推荐)
+
+这是生产环境最常用的模式：**明确定义路由规则，但目标地址使用服务名**
+
+```yaml
+spring:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848 # Nacos 地址
+    gateway:
+      routes:
+        - id: product_route
+          # 【核心】使用 lb 协议 + 服务名称
+          uri: lb://product-service
+          predicates:
+            # 匹配路径
+            - Path=/product/**
+```
+
+**效果**：访问 http://gateway:9527/product/1 -> 负载均衡转发 -> http://192.168.1.5:8081/product/1
+
+
+
+##### d. 关键伴侣：StripPrefix 过滤器
+
+###### 问题
+
+在微服务整合中，有一个问题几乎人人都会遇到：**路径不一致**
+
+- **网关暴露的路径**：为了区分不同服务，我们通常加上前缀，如 `/product-service/api/xxx`
+- **微服务真实路径**：微服务内部通常不包含这个服务名前缀，而是直接 `/api/xxx`
+
+这时必须使用 **`StripPrefix`** 过滤器
+
+
+
+###### 原理图解
+
+配置 `StripPrefix=1` 表示：**在转发之前，去掉路径的第一层**
+
+| 客户端请求 URL         | 配置            | 转发给微服务的 URL | 结果                   |
+| ---------------------- | --------------- | ------------------ | ---------------------- |
+| `/product/get`         | 无              | `/product/get`     | ✅ (如果微服务有此接口) |
+| `/product-service/get` | `StripPrefix=1` | `/get`             | ✅ (去掉了前缀)         |
+| `/api/v1/product/get`  | `StripPrefix=2` | `/product/get`     | ✅ (去掉了两层)         |
+
+
+
+###### 完整配置示例
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: order_route
+          uri: lb://order-service
+          predicates:
+            # 前端访问路径，带上了服务名作为前缀
+            - Path=/order-service/**
+          filters:
+            # 【重要】截断第 1 层前缀 (/order-service)，只把后面的转发给微服务
+            - StripPrefix=1
+```
+
+
+
+##### e. DiscoveryLocator (自动路由)
+
+Spring Cloud Gateway 提供了一种“偷懒”模式，可以 **一行路由都不写**，自动根据 Nacos 里的服务名为所有服务创建路由
+
+###### 开启配置
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true # 开启自动路由
+          lower-case-service-id: true # 强制将服务名转为小写 (推荐开启)
+```
+
+
+
+###### 访问规则
+
+开启后，网关会自动创建规则：`Path=/服务名/**` -> `lb://服务名`
+
+- **访问地址**：`http://gateway-ip:port/服务名/接口路径`
+- 例如：`http://localhost:9527/order-service/create`
+
+
+
+###### 为什么生产环境不推荐？
+
+1. **URL 丑陋**：必须暴露内部服务名给前端
+2. **不可控**：无法针对某个服务单独配置限流、重试或特殊的过滤器
+3. **命名冲突**：如果服务名和服务里的接口路径冲突，容易导致 404
+
+> **结论**：**建议使用“手动配置路由 + lb 协议”的模式**，虽然麻烦一点，但控制力最强
+
+
+
+##### f. 实际开发中的“巨坑”指南
+
+###### 坑一：服务名的大小写敏感
+
+- **现象**：Nacos 里显示服务名是 `Product-Service` (大写)，你在路由里写 `lb://product-service` (小写)，结果报 503
+- **原因**：Gateway 对服务名匹配有时非常严格
+- **最佳实践**：所有微服务的 `spring.application.name` **统一使用小写中划线格式** (kebab-case)，如 `order-service`, `user-center`
+
+
+
+###### 坑二：`lb://` 不能用于 Predicate
+
+- **错误想法**：我想判断如果请求要去 `order-service`，就拦截它
+- **纠正**：`lb://` 只是一个 **URI 协议**，只能写在 `uri:` 字段里。断言（Predicate）只能判断 HTTP 请求本身（路径、Header等），无法判断“目标服务是谁”
+
+
+
+###### 坑三：StripPrefix 切多了
+
+- **现象**：配置了 `StripPrefix=1`，访问 `/test`，结果报 404 或 500
+- **原因**：`/test` 只有一层。切掉一层后变成了“空字符串”或 `/`
+- **解决**：确保请求路径的层级数 > StripPrefix 的数值
+
+
+
+
+
+#### 10. 高级特性（跨域配置与限流）
+
+##### a. 跨域配置 (CORS)
+
+###### 为什么需要 CORS？
+
+- 在前后端分离架构中，前端通常运行在 `localhost:8080`，而网关运行在 `localhost:9527`
+- 当浏览器发现前端试图向不同端口（或域名）的后端发起请求时，出于安全考虑，会默认拦截响应
+- 这就是 **跨域资源共享 (Cross-Origin Resource Sharing)** 问题
+
+
+
+###### 解决方案
+
+- 在微服务架构中，**最佳实践** 是：**只在网关层配置 CORS，后端微服务不需要做任何处理** 
+- 如果网关配置了 CORS，下游微服务也配置了 CORS，浏览器会报“重复的 Access-Control-Allow-Origin”错误
+
+
+
+###### YAML 配置方式 (推荐)
+
+Spring Cloud Gateway 提供了非常简单的全局 CORS 配置，直接修改 `application.yml` 即可
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      # 全局跨域配置
+      globalcors:
+        cors-configurations:
+          '[/**]': # 匹配所有请求
+            allowedOrigins: "*" # 允许所有的源 (生产环境建议指定具体域名，如 [https://my-app.com](https://my-app.com))
+            # allowedOriginPatterns: "*" # 如果 Spring Boot 版本较高，可能需要用这个代替 allowedOrigins
+            allowedMethods: # 允许的 HTTP 方法
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*" # 允许所有的请求头
+            allowCredentials: true # 允许携带 Cookie
+            maxAge: 3600 # 预检请求(OPTIONS)的缓存时间，单位秒
+```
+
+
+
+##### b. 请求限流
+
+###### 核心原理：令牌桶算法
+
+Gateway 内置了基于 Redis 的限流过滤器 `RequestRateLimiter`。它使用的是 **令牌桶算法**：
+
+1. **桶**：系统有一个存放令牌的容器
+2. **放令牌**：系统以固定的速率往桶里放入令牌（比如每秒放 10 个）
+3. **拿令牌**：请求进来时，必须从桶里拿走一个令牌才能被处理
+4. **结果**：如果桶空了（令牌拿完了），请求就会被拒绝（HTTP 429 Too Many Requests）
+
+
+
+###### 环境准备
+
+限流依赖 **Redis** 来存储令牌桶的状态。请确保 `pom.xml` 中引入了 Redis 响应式依赖：
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-redis-reactive</artifactId>
+</dependency>
+```
+
+
+
+###### 第一步：定义限流规则
+
+我们需要告诉网关：**按什么维度来限流？** 是按 IP 限流？还是按用户 ID 限流？还是按接口 URL 限流？
+
+这就需要编写一个 `KeyResolver` 的 Bean
+
+**Java 代码示例 (按 IP 限流)**：
+
+```java
+@Configuration
+public class RateLimitConfig {
+
+    /**
+     * 按请求 IP 限流
+     * 返回的 String 就是 Redis 中的 Key
+     */
+    @Bean
+    public KeyResolver ipKeyResolver() {
+        return exchange -> {
+            // 获取请求的 HostAddress (IP)
+            String ip = exchange.getRequest().getRemoteAddress().getAddress().getHostAddress();
+            System.out.println("限流检测 IP: " + ip);
+            return Mono.just(ip);
+        };
+    }
+    
+    // 如果想按用户 ID 限流 (假设参数中有 userId)
+    /*
+    @Bean
+    public KeyResolver userKeyResolver() {
+        return exchange -> Mono.just(exchange.getRequest().getQueryParams().getFirst("userId"));
+    }
+    */
+}
+```
+
+
+
+###### 第二步：配置 YAML
+
+在具体的路由中，应用 `RequestRateLimiter` 过滤器
+
+```yaml
+spring:
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+
+  cloud:
+    gateway:
+      routes:
+        - id: rate_limit_route
+          uri: lb://cloud-payment-service
+          predicates:
+            - Path=/payment/limit/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                # 1. 引用我们在 JavaConfig 中定义的 Bean 名称
+                key-resolver: "#{@ipKeyResolver}"
+                # 2. 令牌填充速率 (每秒放多少个令牌) -> 限制平均 QPS
+                redis-rate-limiter.replenishRate: 1
+                # 3. 令牌桶容量 (允许在一秒内突发的最大请求数)
+                redis-rate-limiter.burstCapacity: 10
+                # 4. 每个请求消耗多少个令牌 (默认为 1)
+                redis-rate-limiter.requestedTokens: 1
+```
+
+**配置解读**：
+
+- `replenishRate: 1`：每秒产生 1 个令牌。这意味着稳态下，每秒只能通过 1 个请求
+- `burstCapacity: 10`：桶最大能存 10 个令牌。这意味着如果前几秒没有请求，桶满了，下一秒突然来了 10 个请求，这 10 个都能瞬间通过（突发流量）。第 11 个会被拒绝
+
+
+
+###### 测试效果
+
+1. 启动 Redis
+2. 快速刷新访问 `http://localhost:9527/payment/limit/test`
+3. **结果**：正常情况下返回 200。当你刷新速度极快（超过 1次/秒）时，网关会返回 **HTTP 429 Too Many Requests**
 
 
 
