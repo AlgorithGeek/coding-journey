@@ -6284,7 +6284,7 @@ public class AppConfig {
 
 ### 实现 `WebMvcConfigurer` 接口
 
-- 这是在 Spring Boot 中进行 Spring MVC 自定义配置的**首选方式**和**推荐方式**
+- 这是在 Spring Boot 中进行 Spring MVC 自定义配置的 **首选方式** 和 **推荐方式**
 
 #### 核心定义
 
