@@ -98,7 +98,7 @@ List<String> result = sourceList.stream()
 
 一个完整的 Stream 操作链由三部分组成：数据源、零个或多个中间操作以及一个终端操作
 
-```tex
+```text
 数据源 (Source) → 中间操作 (Intermediate) → ... → 中间操作 (Intermediate) → 终端操作 (Terminal)
 ```
 
@@ -449,9 +449,15 @@ Stream<String> wordStream = java.util.regex.Pattern.compile("\\s+")
 
 - **返回新 Stream**：允许操作链式调用（fluent API）
 
-- **惰性执行 (Lazy Execution)**：它们不立即执行，只是记录下需要对数据执行哪些步骤。只有当终端操作被调用时，数据才会真正流过整个操作链
+- **惰性执行**：它们不立即执行，只是记录下需要对数据执行哪些步骤。只有当终端操作被调用时，数据才会真正流过整个操作链
 
   >Stream API  **惰性执行** 的核心目的实际上是为了 **高性能** 和 **高效率**
+
+- **管道节点**：
+  - **概念**：Stream 在底层实现上，将每一个中间操作封装为一个**“节点” (Node)**，这些节点像链表一样串联起来，形成流水线
+  - **机制**：数据像水流一样依次流经这些节点**（垂直流向）**
+    - **无状态节点** (如 `filter`, `map`)：像普通的阀门，数据来了处理完就送走，不记事
+    - **有状态节点** (如 `distinct`, `sorted`)：像带有关卡的检查站，内部维护了特定的 **状态容器**（如 Set,Buffer）来记录流经的数据，用于拦截或排序
 
 
 
@@ -574,36 +580,52 @@ List<String> allWords = sentences.stream()
 ### 3.4 distinct (去重)
 
 - **定义**：`Stream<T> distinct()`
-
 - **作用**：返回一个由 Stream 中唯一元素组成的 Stream
+- **底层原理**：
+  - **基于 Set**：虽然 Stream 是流式处理的，但在 `distinct()` **节点内部，维护了一个类似 `HashSet` 的结构**
+  - **判重标准**：
+    - **基本类型/String**：按值判定
+    - **对象类型**：完全依赖 `equals(Object)` 和 `hashCode()`
+      - **注意**：如果自定义对象没有重写这两个方法，`distinct` 将失效（因为默认比较的是内存地址）
 
 - **机制**：
 
   1. **基本类型/String**：按值进行去重
   2. **对象类型**：依赖元素的 `equals(Object)` 和 `hashCode()` 方法。要使 `distinct` 对自定义对象生效，**必须** 正确地重写这两个方法
+- **状态 (Stateful)**：
+  - `distinct` 是一个**有状态** 的中间操作
+  - 普通操作（如 `filter`）是“健忘”的，处理完一个丢一个；
+  - `distinct` 必须 **记住** 之前所有通过的元素，才能判断当前元素是否重复
+- **关键隐患**：
+  1. **内存开销**：因为它要存储所有 **不重复** 的元素。如果处理 1000 万个不重复的数据，内存可能会暴涨
+  2. **无限流杀手**：
+     - 如果在一个由随机数生成的 **无限流** 上直接调用 `distinct()`，程序会卡死（因为它试图记住无穷无尽的数字，永远无法完成流的构建），或者耗尽内存
+  3. **并行流性能差**：在 `parallelStream()` 中，多个线程由于需要维护同一个“去重名单”（Set），会产生大量的同步开销，性能反而可能不如串行
 
-- **状态**：
 
-  `distinct` 是一个**有状态 (Stateful)** 的中间操作。它需要维护一个内部状态（例如一个 `HashSet`）来记录已经出现过的元素，以便判断当前元素是否重复
+
+- **代码示例**
 
 ```JAVA
 // 示例 1: 基本类型去重
 List<Integer> numbers = Arrays.asList(1, 2, 2, 3, 3, 3, 4, 5, 5);
-
 List<Integer> distinctNumbers = numbers.stream()
     .distinct()
     .collect(Collectors.toList());
 // 结果: [1, 2, 3, 4, 5]
 
-// 示例 2: 对象去重 (假设 User 类已正确重写 equals 和 hashCode)
+// 示例 2: 对象去重 (⚠️ 必须重写 equals/hashCode，推荐使用 Lombok @Data)
+@Data @AllArgsConstructor
+class User { String name; int age; }
+
 List<User> users = Arrays.asList(
     new User("Alice", 25),
     new User("Bob", 30),
-    new User("Alice", 25) // 这是一个重复对象
+    new User("Alice", 25) // 内容相同，但如果是 new 出来的，默认地址不同
 );
 
 List<User> uniqueUsers = users.stream()
-    .distinct()
+    .distinct() // 因为加了 @Data，这里能正确识别出 Alice 是重复的
     .collect(Collectors.toList());
 // 结果: [User("Alice", 25), User("Bob", 30)]
 ```
@@ -1228,12 +1250,14 @@ int[] intArray = IntStream.range(1, 6).toArray();
 
 
 
-## 5. 收集器 Collectors
+## 5. 收集器 `Collectors`
 
-`Collectors` 是 `java.util.stream.Collector` 接口的实用工具类，提供了大量常用的、预先实现好的 `Collector` 实例
+`Collectors` 是 `java.util.stream.Collector` 接口的实用**工具类**，提供了大量常用的、预先实现好的 `Collector` 实例
 
 - `collect()` 是一个终端操作，它接收一个 `Collector` 作为参数，用于将流中的元素“汇总”到最终的容器或结果中
-  - `Collectors` 的唯一作用，就是被用作 `Stream.collect()` 方法的参数，用于指定流应该 **如何被收集和汇总**
+  - `Collectors` 的 **唯一作用**，就是被用作 `Stream.collect()` 方法的参数，用于指定流应该 **如何被收集和汇总**
+  
+    > 在别的地方这玩意没用，至少我没见过别的地方有这玩意儿
 
 
 
@@ -1290,7 +1314,7 @@ TreeSet<String> treeSet = list.stream()
 - `Collectors.toMap(keyMapper, valueMapper)`:
 
   - **作用**: 将元素转换为 Map，`keyMapper` 用于提取键，`valueMapper` 用于提取值
-  - **陷阱**: 如果流中存在**重复的键**（keyMapper 产生相同的值），此方法将抛出 `IllegalStateException`
+  - **陷阱**: 如果流中存在 **重复的键**（keyMapper 产生相同的值），此方法将抛出 `IllegalStateException`
 
   
 
