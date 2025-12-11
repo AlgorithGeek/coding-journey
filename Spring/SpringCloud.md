@@ -3904,11 +3904,13 @@ LoadBalancer
 
 ##### (1) 为什么需要 Sentinel?
 
-在微服务架构中，服务之间的调用关系错综复杂。
+在微服务架构中，服务之间的调用关系错综复杂
 
 - 如果调用链中的某个下游服务（如 `Service C`）出现不稳定（**响应过慢** 或 **异常飙升**），会引发一系列连锁反应：
   1. **资源耗尽**：上游服务（`Service B`）的线程会因为等待 `Service C` 的响应而阻塞
   2. **雪崩效应**：随着请求不断进来，`Service B` 的线程池迅速被占满，导致 `Service B` 也变得不可用，最终拖垮整个系统（`Service A`）
+
+
 
 **Sentinel 的核心职责**
 
@@ -3923,8 +3925,6 @@ Sentinel (哨兵) 是阿里巴巴开源的流量防卫组件，它的设计哲�
 - **熔断降级**：**及时止损**
 
   - 当检测到下游服务响应过慢或异常过多时，在一段时间内 **自动切断** 调用，直接返回默认值，给下游服务喘息恢复的时间
-
-
 
 
 
@@ -4014,7 +4014,7 @@ Sentinel 的原生用法非常像 Java 的 `synchronized` 锁或数据库事务�
 1. **定义规则**：告诉 Sentinel 哪个资源需要被限流，确定需要保护的代码块（业务逻辑）
 2. **申请凭证 (`SphU.entry`)**：尝试进入资源
 3. **业务逻辑**：如果进入成功，执行业务
-4. **异常处理**：**必须** 捕获此异常，处理被限流/熔断后的降级逻辑。
+4. **异常处理**：**必须** 捕获此异常，处理被限流/熔断后的降级逻辑
 5. **资源释放**：无论成功失败，必须退出资源。**这是最重要的一步**，必须在 `finally` 中执行，否则会导致上下文堆积，引发内存泄漏
 
 **代码示例：**
@@ -4100,7 +4100,7 @@ public class SentinelHelloWorld {
 | 方法签名                           | 参数含义 | 必须?  | 说明                                                         |
 | ---------------------------------- | -------- | ------ | ------------------------------------------------------------ |
 | `setResource(String resource)`     | 资源名   | **是** | 必须与 `SphU.entry(name)` 中的 name 完全一致                 |
-| `setGrade(int grade)`              | 阈值类型 | **是** | `RuleConstant.FLOW_GRADE_QPS`: 按 QPS 限流 (1)`RuleConstant.FLOW_GRADE_THREAD`: 按并发线程数限流 (0) |
+| `setGrade(int grade)`              | 阈值类型 | **是** | `RuleConstant.FLOW_GRADE_QPS`: 按 QPS 限流 (1)<br />`RuleConstant.FLOW_GRADE_THREAD`: 按并发线程数限流 (0) |
 | `setCount(double count)`           | 阈值     | **是** | 如果是 QPS 模式，表示每秒最大请求数。如果是线程模式，表示最大并发线程数 |
 | `setLimitApp(String limitApp)`     | 来源应用 | 否     | 用于**链路限流**。默认 `default` (不区分来源)                |
 | `setStrategy(int strategy)`        | 调用关系 | 否     | `DIRECT`: 直接限流 (默认)`RELATE`: 关联限流`CHAIN`: 链路限流 |
@@ -4184,10 +4184,10 @@ public class SentinelHelloWorld {
 
 > `com.alibaba.csp.sentinel.Entry`
 
-| 方法签名                          | 返回值 | 核心作用                 | 参数详解                                            |
-| --------------------------------- | ------ | ------------------------ | --------------------------------------------------- |
-| `exit()`                          | `void` | **必须调用**。退出资源。 | 无。需在 `finally` 块中调用。                       |
-| `exit(int count, Object... args)` | `void` | 带参退出。               | 参数需与 `entry` 时保持一致，否则可能导致统计偏差。 |
+| 方法签名                          | 返回值 | 核心作用               | 参数详解                                          |
+| --------------------------------- | ------ | ---------------------- | ------------------------------------------------- |
+| `exit()`                          | `void` | **必须调用**。退出资源 | 无。需在 `finally` 块中调用                       |
+| `exit(int count, Object... args)` | `void` | 带参退出               | 参数需与 `entry` 时保持一致，否则可能导致统计偏差 |
 
 
 
@@ -4229,7 +4229,7 @@ public class SentinelHelloWorld {
 | 模式名称            | 常量值                | 核心含义                             | 典型场景                                                     |
 | ------------------- | --------------------- | ------------------------------------ | ------------------------------------------------------------ |
 | **直接模式** (默认) | `STRATEGY_DIRECT` (0) | **自己** 流量超标，限流 **自己**     | 绝大多数普通的接口限流                                       |
-| **关联模式**        | `STRATEGY_RELATE` (1) | **别人** 流量超标，限流 **自己**     | **支付接口**压力大时，限制**订单查询**接口；<br />让出资源给核心业务（牺牲非核心保核心） |
+| **关联模式**        | `STRATEGY_RELATE` (1) | **别人** 流量超标，限流 **自己**     | **支付接口** 压力大时，限制 **订单查询** 接口；<br />让出资源给核心业务（牺牲非核心保核心） |
 | **链路模式**        | `STRATEGY_CHAIN` (2)  | 只有从 **特定入口** 进来的流量才限流 | 区分调用来源（如：只限制 App 端流量，不限制 PC 端流量）      |
 
 
@@ -4319,7 +4319,7 @@ public class SentinelHelloWorld {
   rule.setCount(100); // 最终峰值 QPS
   rule.setControlBehavior(RuleConstant.CONTROL_BEHAVIOR_WARM_UP); // 设置为 Warm Up
   rule.setWarmUpPeriodSec(10); // 预热时间 10秒
-  // 效果：刚启动时阈值只有 33，随后在 10s 内线性增长到 100。
+  // 效果：刚启动时阈值只有 33，随后在 10s 内线性增长到 100
   ```
 
 
@@ -4661,7 +4661,7 @@ public class OrderFallbackHandler {
 
 ##### 4.1 热点参数限流
 
-热点参数限流是 Sentinel 的一把“手术刀”。它能根据请求中**携带的参数值**，动态地统计并进行限流
+热点参数限流是 Sentinel 的一把“手术刀”。它能根据请求中 **携带的参数值**，动态地统计并进行限流
 
 ###### (1) 为什么需要热点限流？
 
@@ -4897,7 +4897,7 @@ public static void initSystemRules() {
 </dependency>
 
 <!-- 
-  注意：如果后续需要 Nacos 持久化，还需要引入 sentinel-datasource-nacos。
+  注意：如果后续需要 Nacos 持久化，还需要引入 sentinel-datasource-nacos
   但在本节（仅接入控制台）暂时不需要。
 -->
 ```
@@ -5045,10 +5045,6 @@ public interface RemoteUserService {
 
 
 
-
-
-
-
 ##### 5.2 规则持久化 (Push Mode)
 
 在默认情况下（**Original 模式**），Sentinel 控制台推送的规则是直接保存在微服务 **内存** 中的
@@ -5127,7 +5123,7 @@ Sentinel 支持三种规则管理模式，但在生产环境中，**Push 模式�
 
 **导致的问题**： 
 
-- 如果你依然在 Sentinel 原生控制台上修改规则，这些规则**只会被推送到微服务内存**，**不会同步到 Nacos**。 
+- 如果你依然在 Sentinel 原生控制台上修改规则，这些规则 **只会被推送到微服务内存**，**不会同步到 Nacos**。
 
   这意味着：**重启后，你在 Sentinel 控制台改的规则依然会丢失！**
 
@@ -5237,8 +5233,8 @@ spring:
 ###### (5) 避坑小贴士
 
 1. **Dashboard 是“只读”的**：配置好 Push 模式后，**请直接在 Nacos 修改规则**。不要在 Sentinel 控制台修改，因为控制台改的不会同步回 Nacos，重启就丢了
-2. **JSON 格式**：必须是**数组** `[...]`，哪怕只有一条规则
-3. **Data ID 隔离**：流控规则和熔断规则**不能**混在同一个 Data ID 里，因为 `rule-type` 只能指定一种解析器
+2. **JSON 格式**：必须是 **数组** `[...]`，哪怕只有一条规则
+3. **Data ID 隔离**：流控规则和熔断规则 **不能** 混在同一个 Data ID 里，因为 `rule-type` 只能指定一种解析器
 
 
 
@@ -5246,7 +5242,2167 @@ spring:
 
 ## 分布式事务
 
-seata
+### seata
+
+#### 1. 分布式事务综述
+
+##### 1.1 痛点：本地事务的失效
+
+在学习 Seata 之前，我们必须先彻底搞清楚一个问题：**我们在单体应用里用得好好的 `@Transactional`，为什么一到微服务架构就崩了？**
+
+- 这不仅仅是“配置”变了，而是底层的 **物理边界** 变了
+
+
+
+###### A. 传统单体项目
+
+在传统的单体应用中，Spring 的声明式事务（`@Transactional`）是基于 **本地事务** 实现的
+
+- **物理基础**：同一个 JVM 进程，同一个数据库实例
+- **核心机制**：Spring 的 `DataSourceTransactionManager` 利用了 `java.sql.Connection` 对象
+  1. 开启事务：`connection.setAutoCommit(false)`
+  2. 业务执行：所有 SQL 都在这一条连接上执行
+  3. 结束事务：如果无异常，执行 `connection.commit()`；如果有异常，执行 `connection.rollback()`
+
+**结论**：只要是在同一个 JVM 内，Spring 就能通过 `ThreadLocal` 绑定同一个数据库连接，从而保证 ACID（原子性、一致性、隔离性、持久性）
+
+
+
+###### B. 微服务下的“崩塌”
+
+当我们把单体拆分为微服务（如：订单服务、库存服务、账户服务）后，情况发生了本质变化：
+
+- **跨进程**：服务之间通过 RPC（Feign/Dubbo）通信，不再是本地方法调用
+- **跨资源**：每个微服务通常连接自己的数据库
+
+
+
+**场景复现：电商下单流程**
+
+假设我们有一个下单方法，逻辑如下：
+
+```java
+// 伪代码：OrderService (订单微服务)
+
+@Transactional // 这里开启的是 OrderDB 的本地事务
+public void placeOrder(OrderDTO order) {
+
+    // 1. 本地操作：插入订单 (操作 OrderDB)
+    orderMapper.insert(order); 
+    
+    // 2. 远程调用：扣减库存 (RPC 调用 StockService)
+    // 注意：这里是跨网调用，StockService 会开启它自己的本地事务
+    stockClient.deduct(order.getProductId(), order.getCount()); 
+    
+    // 3. 模拟异常：比如计算金额时发生了除以零，或者空指针
+    int i = 10 / 0; 
+    
+    //...其它逻辑
+}
+```
+
+
+
+###### C. 事故现场分析
+
+当上述代码执行到第 3 步发生异常时，Spring 的事务管理器会捕获这个异常，并试图回滚
+
+- **OrderService 的视角**：
+
+  - 捕获到异常
+  - 拿到 `OrderDB` 的数据库连接，执行 `rollback()`
+  - **结果**：刚才插入的“订单记录”被成功回滚，数据库里查不到这条订单**（符合预期）**
+
+  
+
+- **StockService 的视角**：
+
+  - 它在第 2 步被调用
+  - 它开启了自己的 `StockDB` 事务，扣减库存，提交事务（`commit`）
+  - 它的任务已经完成，连接已经归还给连接池
+  - **结果**：库存已经被扣减，且数据已经持久化到磁盘（无法回滚）
+
+
+
+###### D. 核心矛盾总结
+
+这个场景下，导致了严重的**数据不一致**：**没有生成订单，但是库存却被扣了**
+
+本地事务失效的根本原因在于：
+
+- **Spring 的 `TransactionManager` 的管辖范围仅限于当前 JVM 内部持有的数据库连接**
+
+  **它无法感知、更无法控制运行在另一个 JVM（库存服务）里的数据库事务提交与否**
+
+
+
+这就是 **分布式事务** 要解决的核心痛点：我们需要一个“上帝视角”的协调者，来统筹管理这些分布在不同 JVM、不同数据库里的本地事务，让它们 **“要么一起成功，要么一起失败”**
+
+
+
+##### 1.2 理论基石：CAP 与 BASE
+
+- 上一节我们明确了本地事务在微服务中失效的物理原因。本节我们将探讨分布式系统的 **核心边界**
+  - 不理解这个边界，就无法理解 Seata 不同模式（AT/XA/TCC）的存在意义
+
+
+
+###### a. CAP 定理的严格定义
+
+2000 年 Eric Brewer 提出的 CAP 定理是分布式系统的物理法则。它指出在分布式系统中，以下三个指标 **不可能同时达成**：
+
+- **C (Consistency) 一致性**
+
+  - **严格定义**：线性一致性
+  - **技术指标**：在分布式系统中的所有数据副本，在同一时刻的值必须完全相同
+  - **验证标准**：写入操作一旦返回成功，所有节点在随后的读取操作中都必须能读到这个新值
+
+  
+
+- **A (Availability) 可用性**
+
+  - **严格定义**：高可用性
+  - **技术指标**：服务一直可用，对任何非故障节点的请求，必须在有限时间内返回 **非错误** 的响应
+  - **验证标准**：不能返回“系统繁忙”或无限等待，必须返回结果（哪怕是旧数据）
+
+  
+
+- **P (Partition tolerance) 分区容错性**
+
+  - **严格定义**：网络分区耐受能力
+  - **技术指标**：分布式系统在遇到任何网络分区故障（节点之间无法通信）时，仍然能够对外提供满足 C 或 A 的服务
+
+
+
+###### b. 为什么三者不可兼得？
+
+很多初学者的困惑在于：“为什么我不能设计一个完美的 CAP 系统？” 我们可以通过一个 **逻辑推导** 来证明其不可能性
+
+- **前提条件（P 是必然的）：** 
+
+  - 在分布式系统中，网络是不靠谱的（光纤被挖断、路由抖动）
+
+    假设我们有两个节点 **Node A** 和 **Node B**，它们之间同步数据。一旦网络断开（**P 发生**），系统面临如下场景：
+
+- **场景演练：**
+  1. 客户端向 **Node A** 发送写请求：`set balance = 100`
+  2. **Node A** 接收请求，但在尝试同步给 **Node B** 时，发现网络不通
+
+
+
+**此时，架构师面临唯一的两难抉择：**
+
+- **抉择一：死保一致性 (Choose C, Drop A)**
+
+  - **逻辑**：为了保证 Node A 和 Node B 数据绝对一致
+
+  - **行动**：Node A 检测到无法同步，于是 **拒绝** 或 **阻塞** 客户端的写请求
+
+  - **结果**：数据没乱（C 满足），但系统报错不可用了（A 丢失）
+
+  - **架构模式**：**CP 系统**（如Zookeeper、Seata XA）
+
+    > CP 的意思是 “**在容忍网络分区的前提下**，死保一致性”
+
+  
+
+- **抉择二：死保可用性 (Choose A, Drop C)**
+
+  - **逻辑**：无论发什么事，必须让用户能用
+
+  - **行动**：Node A **接受** 写请求，更新本地数据为 100
+
+  - **结果**：系统可用（A 满足），但此时 Node B 还是旧值，两边数据不一致（C 丢失）
+
+  - **架构模式**：**AP 系统**（如 Eureka、Seata AT/TCC）
+
+    >AP 的意思是“**在容忍网络分区的前提下**，死保可用性”
+
+
+
+**推导结论：** **P（分区）是前提，当 P 发生时，我们只能在 C 和 A 之间做“二选一”的零和博弈**
+
+
+
+
+
+###### c. 工业界的解决方案：BASE 理论
+
+鉴于 **CP 系统（强一致性）**通常伴随着性能低下和可用性丧失，互联网业务（如电商、社交）通常**无法接受 CP 架构**
+
+- 于是，eBay 的架构师提出了 **BASE 理论** , 可以说，**BASE 理论就是 AP 架构的“生存法则”**
+
+
+
+**核心思想**：既然无法做到强一致性（Strong Consistency），我们可以追求 **最终一致性**，用时间换空间
+
+- **BA (Basically Available) 基本可用**
+
+  - 分布式系统在出现故障时，允许损失部分可用性（例如：响应时间变长、功能降级），但核心功能依然可用
+  - **实战**：双11期间，为了保下单（核心），暂时关闭评价功能（非核心）
+
+  
+
+- **S (Soft state) 软状态**
+
+  - 允许系统存在中间状态，该状态不影响系统整体可用性
+  - **实战**：Seata AT 模式中，一阶段提交后，数据库数据已经修改，但全局事务并未结束。此时的数据状态就是“软状态”
+
+  
+
+- **E (Eventually consistent) 最终一致性**
+
+  - 系统保证在没有新的更新操作下，经过一段时间（可能是毫秒级，也可能是分钟级），所有数据副本最终会达到一致
+  - **实战**：Seata 发现异常后，通过 Undo Log 异步回滚，将数据修正回原始状态
+
+
+
+###### 4. Seata 的架构定位
+
+理解了 CAP 和 BASE，我们就看懂了 Seata 的版图：
+
+1. **Seata AT / TCC 模式**：
+
+   - **定位**：**AP 模型**，遵循 **BASE 理论**
+   - **特征**：允许短暂的数据不一致（软状态），通过补偿机制实现最终一致性
+   - **适用**：绝大多数高并发互联网业务
+
+   
+
+2. **Seata XA 模式**：
+
+   - **定位**：**CP 模型**，遵循 **ACID 理论**
+   - **特征**：利用数据库锁机制，强一致，但性能差
+   - **适用**：对一致性要求极高且并发低的金融核心业务
+
+
+
+
+
+#### 2. Seata 架构
+
+Seata 的架构设计参考了 DTP (Distributed Transaction Processing) 模型，但对其进行了针对微服务的改造
+
+- 它由三个核心角色组成：**TC (事务协调者)**、**TM (事务管理器)**、**RM (资源管理器)**
+
+  > 可以把它们看作是一个 **“指挥中心 + 发起人 + 执行者”** 的协作团队
+
+
+
+##### 2.1 核心组件详解 (The Trinity)
+
+###### A. TC - 事务协调者
+
+> Transaction Coordinator
+
+- **角色定位**：**服务端 (Server)**。它是独立的中间件服务（类似 Nacos、Redis），需要单独部署
+- **核心职责**：
+  - **维护全局事务状态**：记录哪个事务开始了，哪个分支事务提交了，哪个失败了
+  - **决策者**：接收 TM 的提交/回滚指令，然后指挥所有的 RM 进行提交或回滚
+  - **全局锁管理**：管理全局行锁（Global Lock），防止脏写
+- **物理形态**：就是下载的 `seata-server.jar` 包，运行在独立的服务器上
+
+
+
+###### B. TM - 事务管理器
+
+> Transaction Manager
+
+- **角色定位**：**客户端 (Client)**。它嵌入在业务微服务中（通常是发起方）
+- **核心职责**：
+  - **发起人**：它是全局事务的起点
+  - **边界定义**：决定全局事务在哪里开始，在哪里结束
+  - **指令下达**：向 TC 申请开启全局事务，根据业务执行结果，向 TC 发起全局提交（Commit）或全局回滚（Rollback）的决议
+- **代码体现**：通常通过注解 `@GlobalTransactional` 标记的方法，就是 TM 的活动范围
+
+
+
+###### C. RM - 资源管理器
+
+> Resource Manager
+
+- **角色定位**：**客户端 (Client)**。也嵌入在业务微服务中（通常是参与方/被调用方）
+- **核心职责**：
+  - **执行者**：管理本地数据库资源
+  - **注册分支**：当它被调用执行 SQL 时，它会自动向 TC 注册一个“分支事务”，告诉 TC：“我也参与了这个事务”
+  - **汇报状态**：向 TC 汇报本地事务是成功了还是失败了
+  - **执行指令**：接收 TC 的指令，完成二阶段的提交或回滚（例如执行 Undo Log 反向补偿）
+- **代码体现**：Seata 自动代理的数据源
+
+
+
+##### 2.2 核心纽带：XID (Transaction ID)
+
+这三个组件分布在不同的网络节点上，它们靠什么识别彼此属于同一个“团伙”？ 答案是 **XID (Global Transaction ID)**
+
+- **定义**：全局事务的唯一标识符（例如：`192.168.1.5:8091:12345678`）
+- **传递机制**：
+  1. **生成**：TM 向 TC 申请开启事务时，TC 生成 XID 并返回给 TM
+  2. **传播**：TM 在调用下游微服务（RPC）时，会将 XID 放入请求头（Header）中传给下游
+  3. **绑定**：下游的 RM 从请求头拿到 XID，把它和本地执行的 SQL 绑定在一起，向 TC 注册
+
+**上下文理解**： 如果没有 XID 的传递，下游服务就不知道自己处于一个全局事务中，它就会按照普通的本地事务执行（立马提交），一旦需要回滚就完了
+
+
+
+##### 2.3 全局事务的生命周期
+
+一个典型的分布式事务生命周期，可以被拆解为 **4 个关键步骤**
+
+- 假设场景：**用户下单**（TM），调用 **库存服务**（RM1）扣库存，调用 **订单服务**（RM2）创建订单
+
+
+
+###### 第一阶段：执行与决议
+
+这是“干活”的阶段。所有的业务 SQL 都在这个阶段执行完毕，并且 **本地事务已经提交**（注意：数据库里的数据已经改了）
+
+1. **TM 开启全局事务**
+
+   - **动作**：用户请求进入下单接口（带有 `@GlobalTransactional`）。TM 向 TC 发起请求：“我要开启一个全局事务”
+   - **结果**：TC 生成一个全局唯一的 **XID**，并返回给 TM
+
+   
+
+2. **XID 传播**
+
+   - **动作**：TM 调用库存服务（RPC）
+   - **细节**：Seata 的拦截器会自动把 **XID** 塞到 RPC 请求的 Header 中，传给库存服务
+
+   
+
+3. **RM 注册分支与执行**
+
+   - **动作**：
+     1. 库存服务的 RM 拦截到 SQL
+     2. **解析 SQL**：识别出是 `UPDATE stock ...`
+     3. **生成镜像**：查询更新前的数据（Before Image），执行更新，查询更新后的数据（After Image），把这些信息打包成 **Undo Log**
+     4. **注册分支**：RM 拿着 XID 向 TC 汇报：“我是库存服务，我参与了 XID 为 xxx 的事务，我的分支 ID 是 yyy”
+     5. **本地提交**：RM 在同一个本地事务中，**同时提交** 业务 SQL 和 Undo Log
+
+   
+
+4. **TM 决议 (Decide)**
+
+   - **场景 A（一切顺利）**：所有微服务调用都成功返回。TM 决定：**提交 (Commit)**
+   - **场景 B（发生异常）**：任何一个环节抛出了异常。TM 决定：**回滚 (Rollback)**
+
+
+
+###### 第二阶段：全局提交或回滚
+
+这是“收尾”的阶段。TC 根据 TM 的决议，指挥所有 RM 进行清理或还原
+
+**场景 A：全局提交 (Global Commit)**
+
+- **触发**：TM 向 TC 发送 `GlobalCommit` 指令
+
+- **TC 动作**：TC 发现所有分支都成功了
+
+- **RM 动作**：
+
+  - 因为一阶段本地事务已经真的提交了（数据是对的），所以二阶段非常快
+  - **异步清理**：TC 通知 RM：“完事了，把刚才记的 Undo Log 删了吧，留着占地方”
+  - *注：AT 模式的提交是**异步**的，性能极高*
+
+  
+
+**场景 B：全局回滚 (Global Rollback)**
+
+- **触发**：TM 捕获异常，向 TC 发送 `GlobalRollback` 指令
+- **TC 动作**：TC 查到该 XID 下所有的分支记录
+- **RM 动作**：
+  - **同步回滚**：TC 立即通知所有 RM：“出事了，快回滚！”
+  - **反向补偿**：RM 收到 XID，去数据库查 Undo Log
+  - **还原数据**：根据 After Image 和 Before Image，生成反向 SQL（例如把 `stock=99` 改回 `stock=100`）并执行
+  - **完成**：回滚成功后，向 TC 汇报
+
+
+
+##### 2.4 Seata 的四种模式概览
+
+理解了生命周期，我们需要知道 Seata 不止有一种玩法。虽然 90% 的场景用 AT，但了解其他模式能让你在架构选型时更专业
+
+| 模式     | 全称                  | 核心特点                                  | 侵入性 | 适用场景                                                    |
+| -------- | --------------------- | ----------------------------------------- | ------ | ----------------------------------------------------------- |
+| **AT**   | Automatic Transaction | **无侵入**、两阶段提交、自动生成 Undo Log | 低     | **首选**。绝大多数业务场景（Web应用、电商）                 |
+| **TCC**  | Try-Confirm-Cancel    | **高性能**、手动实现三个方法              | 高     | 核心系统，对性能要求极高，或不支持 SQL 的数据库（如 Redis） |
+| **Saga** | Saga                  | **长事务**、基于状态机、无锁              | 中     | 业务流程极长、跨机构调用的场景（如银行跨行转账）            |
+| **XA**   | eXtended Architecture | **强一致**、数据库原生支持、阻塞等待      | 低     | 金融核心，不能容忍任何中间状态，并发要求不高                |
+
+
+
+#### 3. Seata Server (TC) 部署与配置
+
+理论部分翻篇了。现在的任务是：**把 Seata 的服务端（TC）跑起来**
+
+- 在 Spring Cloud Alibaba 生态中，Seata Server 通常不单打独斗，而是和 **Nacos** 深度绑定（用 Nacos 做注册中心和配置中心）
+
+
+
+##### 3.1 TC 的存储模式
+
+- 在启动 Seata Server 之前，你必须做一个架构决策：**Seata 运行过程中的数据存哪里？**
+
+  - Seata Server (TC) 在运行时，需要记录所有 **正在进行中** 的全局事务状态
+
+    - 比如：事务 `XID:1001` 正在进行中，它下面挂了 3 个分支事务，其中 2 个已经提交了，还有 1 个没跑完
+
+      这些数据如果不持久化，一旦 TC 重启或宕机，正在运行的事务就会丢失（导致数据不一致）
+
+      Seata 提供了三种存储模式，由 `store.mode` 参数控制
+
+
+
+###### a. File 模式 (文件存储)
+
+- **原理**：TC 将事务会话数据序列化后，直接写入本地磁盘文件（默认路径为 `sessionStore/root.data`）
+- **优点**：
+  - **零依赖**：不需要连接数据库或 Redis，解压即用
+  - **快速上手**：最适合本地开发调试
+- **缺点 (致命)**：
+  - **单点故障**：数据在本地文件里，意味着你没法部署多个 TC 节点组成集群（因为文件没法共享）。如果这台机器挂了，事务状态就丢了
+  - **性能瓶颈**：受限于本地磁盘 IO
+- **适用场景**：本地开发 (Local Development)、功能验证
+
+
+
+###### b. DB 模式 (数据库存储) —— **生产**
+
+- **原理**：TC 将会话数据存入共享的数据库（MySQL/Oracle/PostgreSQL）。需要提前建三张表：
+  - `global_table`：存储全局事务信息（XID, 状态, 超时时间）
+  - `branch_table`：存储分支事务信息（分支 ID, 资源 ID）
+  - `lock_table`：存储全局锁信息（用于隔离性控制）
+- **优点**：
+  - **高可用 (HA)**：多个 TC 节点连接同一个数据库，天然支持集群部署。任何一个 TC 挂了，别的 TC 可以接手继续处理
+  - **数据安全**：依赖成熟数据库的持久化能力
+- **缺点**：
+  - **依赖性**：需要维护一个额外的数据库
+  - **性能上限**：受限于数据库的写性能（TPS）
+- **适用场景**：**生产环境**
+
+
+
+###### c. Redis 模式 (缓存存储)
+
+- **原理**：TC 将会话数据存入 Redis
+- **优点**：
+  - **高性能**：基于内存操作，吞吐量极高
+  - **支持集群**：多个 TC 可以共享 Redis 数据
+- **缺点**：
+  - **数据风险**：虽然 Redis 有 AOF/RDB，但在极端断电或 Redis 集群故障时，仍有丢失少量事务数据的风险（相比 DB 模式）
+- **适用场景**：对吞吐量要求极高、且能容忍极低概率事务丢失的场景
+
+
+
+###### d. 选型对比总结
+
+| 特性           | File 模式          | DB 模式        | Redis 模式     |
+| -------------- | ------------------ | -------------- | -------------- |
+| **部署架构**   | 单机 (Stand-alone) | 集群 (Cluster) | 集群 (Cluster) |
+| **读写性能**   | 中                 | 低 (受限于 DB) | **极高**       |
+| **数据可靠性** | 低 (单机风险)      | **高** (ACID)  | 中 (AOF/RDB)   |
+| **外部依赖**   | 无                 | 数据库         | Redis          |
+| **推荐环境**   | 开发/测试          | **生产环境**   | 高并发生产     |
+
+
+
+##### 3.2 关键配置文件
+
+进入 Seata Server 的 `conf` 目录，你会看到两个核心配置文件。很多初学者容易混淆它们的职责，导致连不上 Nacos 或者改了配置不生效
+
+###### a. registry.conf (入口文件:寻址录)
+
+这是 Seata Server 启动时 **第一个** 读取的文件。它决定了 Seata Server 的“外交关系”。它包含两大核心配置块：
+
+- **registry (注册中心)**：
+
+  - **作用**：决定 TC 把自己注册到哪里（Nacos, Eureka, Zookeeper 等）
+  - **目的**：让微服务（TM/RM）能发现并连接上 TC
+
+  
+
+- **config (配置中心)**：
+
+  - **作用**：决定 TC 去哪里读取详细的运行参数（比如数据库连接 URL、存储模式、超时时间等）
+  - **重要逻辑**：
+    - 如果 `type = "file"`：读取本地的 `file.conf`
+    - 如果 `type = "nacos"`：忽略本地 `file.conf`，直接去 Nacos 读取配置
+
+- **生产环境推荐配置 (基于 Nacos):**
+
+  ```js
+  registry {
+    # 注册中心类型：nacos, eureka, redis, zk, consul, etcd3, sofa
+    type = "nacos"
+  
+    nacos {
+      application = "seata-server"
+      serverAddr = "127.0.0.1:8848"
+      group = "SEATA_GROUP"
+      namespace = ""
+      cluster = "default"
+    }
+  }
+  
+  config {
+    # 配置中心类型：nacos, consul, apollo, etcd3, zk
+    type = "nacos"
+  
+    nacos {
+      serverAddr = "127.0.0.1:8848"
+      namespace = ""
+      group = "SEATA_GROUP"
+    }
+  }
+  ```
+
+  
+
+
+
+###### b. file.conf (参数表：详细配置)
+
+这个文件包含了 Seata Server 运行所需的所有详细参数（如 `store.mode`, `transport.threadFactory` 等）
+
+**生效规则：** 
+
+- 只有当 `registry.conf` 中配置了 `config.type = "file"` 时，这个文件才生效。如果你选择了 Nacos 作为配置中心，**修改这个文件是没有任何用的**
+
+
+
+**关键参数 (以 DB 模式为例):**
+
+```js
+store {
+  # 1. 存储模式：file, db, redis
+  mode = "db"
+
+  # 2. 数据库连接配置 (仅在 mode = "db" 时生效)
+  db {
+    datasource = "druid"
+    driverClassName = "com.mysql.jdbc.Driver"
+    url = "jdbc:mysql://127.0.0.1:3306/seata?useUnicode=true"
+    user = "root"
+    password = "password"
+    minConn = 5
+    maxConn = 30
+    globalTable = "global_table"
+    branchTable = "branch_table"
+    lockTable = "lock_table"
+    queryLimit = 100
+  }
+}
+
+service {
+  # 3. 事务分组映射 (非常重要)
+  # 格式: service.vgroupMapping.事务分组名 = SeataServer集群名
+  # default 是 Seata Server 默认的集群名
+  vgroupMapping.my_test_tx_group = "default"
+  
+  # 4. 降级开关
+  enableDegrade = false
+  # 5. 是否禁用全局事务 (用于故障紧急切断)
+  disableGlobalTransaction = false
+}
+```
+
+
+
+###### **c. 避坑指南**
+
+- 在生产环境下，既然我们通常用 Nacos 做配置中心，那么你需要把 `file.conf` 里的内容（如 `store.mode`, `store.db.url` 等）**全部迁移** 到 Nacos 的配置列表中，而不是在服务器上改文件
+
+- Seata 官方提供了一个脚本 `nacos-config.sh`，可以一键将 `config.txt`（`file.conf` 的扁平化版本）推送到 Nacos
+
+
+
+##### 3.3 部署实战步骤 (DB 模式 + Nacos)
+
+这是 Seata 最经典、最稳定的部署方案。请严格按照顺序执行，任何一步跳过都会导致启动报错
+
+
+
+###### 第一步：初始化数据库
+
+TC 需要数据库来存储全局事务会话。我们需要先建表
+
+1. **创建数据库**： 在你的 MySQL 中创建一个名为 `seata` 的数据库（字符集推荐 `utf8mb4`）
+2. **执行建表脚本**： 去 Seata 官方 GitHub 仓库下载对应版本的脚本（`script/server/db/mysql.sql`）
+   - **核心表说明**：
+     - `global_table`: 存储全局事务（谁开启了事务，状态是 Begin 还是 Committing）
+     - `branch_table`: 存储分支事务（谁参与了事务，Resource ID 是多少）
+     - `lock_table`: **全局锁** 表（用于校验脏写，非常关键）
+
+
+
+###### 第二步：修改 registry.conf
+
+找到 Seata Server 的 `conf/registry.conf`，告诉 TC 去连 Nacos
+
+```js
+registry {
+  type = "nacos"
+  nacos {
+    serverAddr = "127.0.0.1:8848"
+    namespace = ""
+    cluster = "default"
+  }
+}
+
+config {
+  type = "nacos"
+  nacos {
+    serverAddr = "127.0.0.1:8848"
+    namespace = ""
+  }
+}
+```
+
+
+
+###### 第三步：推送到 Nacos 配置中心
+
+**这是最容易出错的一步！** 
+
+- 因为我们在第二步设置了 `config.type = "nacos"`，所以 Seata 启动时 **不会** 去读本地的 `file.conf`，而是去 Nacos 找配置
+
+  此时 Nacos 里是空的，TC 启动就会报错。我们需要把配置参数推上去
+
+
+
+**操作方法：**
+
+1. **准备配置文本**：你可以把 `file.conf` 的内容转化为 Nacos 的 `Properties` 格式，或者直接使用 Seata 提供的 `config.txt` 模板
+2. **核心配置项 (必须确保 Nacos 里有这些 key)**：
+   - `store.mode` = `db`
+   - `store.db.driverClassName` = `com.mysql.jdbc.Driver`
+   - `store.db.url` = `jdbc:mysql://127.0.0.1:3306/seata?useUnicode=true`
+   - `store.db.user` = `root`
+   - `store.db.password` = `123456`
+   - `service.vgroupMapping.my_test_tx_group` = `default` (这是事务分组，后面客户端要用)
+
+**便捷神器**： Seata 源码包里提供了一个脚本 `script/config-center/nacos/nacos-config.sh`
+
+```bash
+# 示例命令：把 config.txt 推送到 Nacos
+sh nacos-config.sh -h 127.0.0.1 -p 8848 -g SEATA_GROUP -t "" -u nacos -w nacos
+```
+
+
+
+###### 第四步：启动 Seata Server
+
+配置完成后，启动服务
+
+- **Docker 方式 (推荐)**：
+
+  ```bash
+  docker run -d --name seata-server \
+  -p 8091:8091 \
+  -e SEATA_IP=192.168.x.x \
+  -e SEATA_CONFIG_NAME=file:/root/seata-config/registry.conf \
+  seataio/seata-server
+  ```
+
+  *(注意：挂载 registry.conf 且确保容器能连上宿主机的 Nacos 和 MySQL)*
+
+- **脚本方式**：
+
+  - Linux/Mac: `sh bin/seata-server.sh`
+  - Windows: 点击`bin/seata-server.bat`
+
+
+
+###### 第五步：验证部署
+
+1. **检查日志**： 观察启动日志，看到类似 `Server started ... listening on 8091` 字样
+2. **检查 Nacos 服务列表**： 登录 Nacos 控制台 -> 服务管理。你应该能看到一个名为 `seata-server` 的服务，且实例数 > 0
+3. **检查数据库**： 虽然此时表是空的，但在后续事务运行时，`global_table` 会有数据进出
+
+
+
+#### 4. Spring Cloud 整合 Seata Client
+
+服务端（TC）搭建完毕后，接下来回到微服务代码中（OrderService, StorageService）
+
+- 我们需要做三件事：加依赖、写配置、建表
+
+
+
+##### 4.1 核心依赖与版本避坑
+
+在 Spring Cloud Alibaba 生态中，整合 Seata 看似只需要引入一个 Starter，但这里藏着一个极易导致项目启动失败的 **版本冲突陷阱**
+
+###### a. 为什么需要依赖管理？
+
+- **接入能力**：我们需要引入 Seata 的客户端 SDK，让微服务拥有连接 TC、注册分支事务、拦截 SQL 的能力
+- **版本对齐**：Spring Cloud Alibaba 内部集成的 Seata SDK 版本通常滞后于 Seata 官方发布的 Server 版本。如果不手动调整，会导致 **通信协议不兼容**
+
+
+
+###### b. 依赖引入最佳实践
+
+请打开你所有需要参与分布式事务的微服务（如 `order-service`）的 `pom.xml`
+
+**标准配置代码：**
+
+```xml
+<!-- 1. 引入 Spring Cloud Alibaba Seata Starter -->
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-seata</artifactId>
+    <!-- 【关键动作】排除内置的 seata-all，防止版本冲突 -->
+    <exclusions>
+        <exclusion>
+            <groupId>io.seata</groupId>
+            <artifactId>seata-spring-boot-starter</artifactId>
+        </exclusion>
+    </exclusions>
+</dependency>
+
+<!-- 2. 手动引入与 Server 端一致的 Seata 版本 -->
+<dependency>
+    <groupId>io.seata</groupId>
+    <artifactId>seata-spring-boot-starter</artifactId>
+    <!-- 【铁律】必须与你部署的 Seata Server 版本完全一致！-->
+    <!-- 例如：服务端是 1.4.2，这里就必须写 1.4.2 -->
+    <version>1.4.2</version> 
+</dependency>
+```
+
+
+
+###### c. 避坑指南
+
+- **现象**：启动报错 `java.lang.AbstractMethodError` 或者连接 TC 时报序列化异常
+
+- **原因**：
+
+  - `spring-cloud-starter-alibaba-seata` 默认依赖的可能是 `seata-all 1.3.0`，而你部署的 Server 是 `1.4.2`
+
+    不同版本的 RPC 协议或序列化机制可能不兼容
+
+- **解决**：如上代码所示，**排除默认依赖，显式指定版本**。这是生产环境最稳妥的做法
+
+
+
+##### 4.2 Client 端核心配置
+
+引入依赖后，微服务还不知道 TC 在哪。我们需要在 `application.yml`（推荐在 `bootstrap.yml` 中，如果你用了 Nacos 配置中心）添加 Seata 的专属配置
+
+
+
+###### 1. 核心配置清单
+
+打开你的微服务配置文件，加入以下内容。这是最简、最标准的 Nacos 集成模式
+
+```yaml
+seata:
+  # 1. 开关：是否启用 Seata 分布式事务（默认 true）
+  enabled: true
+  
+  # 2. 【核心】事务分组 (Transaction Service Group)
+  # 这是一个逻辑名称，代表当前微服务属于哪个“事务组”
+  # 它的值通常是：${spring.application.name}-group
+  # 例如：order-service-group
+  tx-service-group: my_test_tx_group 
+  
+  # 3. 注册中心配置：告诉 Client 去 Nacos 找 TC
+  registry:
+    type: nacos
+    nacos:
+      application: seata-server # 必须与 TC 在 Nacos 注册的服务名一致
+      server-addr: 127.0.0.1:8848
+      group: SEATA_GROUP # TC 注册时的分组 (registry.conf 里的)
+      namespace: "" # 如果 TC 在特定命名空间，这里要填 ID
+      
+  # 4. 配置中心配置：告诉 Client 去 Nacos 拉取详细配置
+  config:
+    type: nacos
+    nacos:
+      server-addr: 127.0.0.1:8848
+      group: SEATA_GROUP 
+      namespace: ""
+```
+
+
+
+###### 2. 关键参数
+
+- **`seata.tx-service-group` (重中之重)**
+
+  - **定义**：客户端的 **逻辑分组标识**
+  - **作用**：它 **不是** TC 的服务名，也不是集群名。它只是一个 **标签**。客户端拿着这个标签，去配置中心问：“我这个组应该连哪个 TC 集群？”
+  - **避坑**：很多初学者随便填一个名字，结果报错 `no available service 'null' found`。这是因为它缺少了 **下一步的映射关系**（4.3 节）
+
+  
+
+- **`seata.registry.nacos.application`**
+
+  - **定义**：Seata Server 在 Nacos 上的服务名
+
+  - **默认值**：`seata-server`
+
+  - **注意**：
+
+    - 该值必须与 Seata Server 启动参数或 `registry.conf` 中配置的 `application` 保持严格一致
+
+      如果服务端自定义了名称（如 `seata-tc-cluster`），此处必须同步修改，否则服务发现机制将失效
+
+  
+
+- **`seata.config.type`**
+
+  - **作用**：
+
+    - 决定了客户端启动时，去哪里读取诸如 `transport.heartbeat`、`client.undo.logTable` 等底层参数
+
+      设置成 `nacos` 可以实现配置动态刷新
+
+  - **最佳实践**：生产环境推荐设置为 `nacos`
+  - **作用**：启用后，客户端将从 Nacos 拉取配置。这允许运维人员在不重启微服务的情况下，动态调整 Seata 的运行时参数（如全局锁重试间隔）
+
+
+
+配置完成后，客户端具备了以下能力：
+
+1. 拥有了一个逻辑标识 `my_test_tx_group`
+2. 晓了去 `127.0.0.1:8848` 寻找名为 `seata-server` 的服务实例
+
+**遗留问题：** 客户端持有的逻辑组名 `my_test_tx_group` 是如何解析并指向具体的 Seata Server 集群的？
+
+- 这涉及到 Seata 核心的**事务分组映射机制**
+
+
+
+##### 4.3 事务分组与映射关系
+
+在上一节的配置中，我们定义了一个核心参数 `seata.tx-service-group = my_test_tx_group`
+
+- 初学者常有的疑问是：*为什么不直接填 Seata Server 的 IP 地址？为什么要绕这么大一个弯子搞个“分组名”？*
+  - 这背后的设计哲学是：**解耦**
+
+
+
+###### 1. 映射机制链路
+
+当微服务启动并尝试连接 Seata Server 时，会经历一个**“三级查找”**的过程
+
+- **第一级：应用层**
+
+  - **配置**：`seata.tx-service-group`
+  - **值**：`my_test_tx_group` (逻辑组名)
+  - **作用**：微服务只知道自己属于哪个逻辑组，不知道具体的服务器在哪
+
+  
+
+- **第二级：配置中心层**
+
+  - **配置**：Client 去 Nacos 配置中心查找 key 为 `service.vgroupMapping.my_test_tx_group` 的配置项
+  - **值**：`default` (Seata Server 的 **物理集群名称**)
+  - **作用**：将“逻辑组名”映射为具体的“后端集群名”
+
+  
+
+- **第三级：服务发现层**
+
+  - **配置**：Client 拿到集群名 `default` 后，去 Nacos 注册中心查找服务名为 `seata-server` 且 **cluster** 属性为 `default` 的实例列表
+  - **值**：`192.168.1.100:8091` (真实 IP)
+  - **作用**：最终定位到物理机器
+
+
+
+###### 2. 为什么要这么设计？
+
+这种设计看似繁琐，实则是为了**高可用 (HA)** 和 **故障隔离**
+
+**场景演练：TC 集群故障切换** 
+
+假设你现在的生产环境连接的是 `beijing-cluster` (机房 A)。突然机房 A 断电了，你需要紧急切到 `shanghai-cluster` (机房 B)
+
+- **如果没有分组映射**：你需要修改所有微服务的 `application.yml`，把 IP 改成上海机房的 IP，然后 **重启所有微服务**。这在生产环境是灾难
+- **有了分组映射**：你只需要在 Nacos 配置中心，把 `service.vgroupMapping.my_test_tx_group` 的值从 `beijing-cluster` 改为 `shanghai-cluster`
+  - **结果**：所有微服务监听配置变化，自动断开旧连接，连上新集群。**无需重启，秒级切换**
+
+
+
+###### 3. 避坑指南：常见报错排查
+
+**报错信息**： `no available service 'null' found, please make sure registry config correct`
+
+**排查步骤**：
+
+1. **检查本地配置**：确认 `application.yml` 里 `tx-service-group` 的值（例如叫 `my_group`）
+2. **检查 Nacos 配置**：确认 Nacos 配置列表里是否真的有一个 DataID 包含 `service.vgroupMapping.my_group`
+3. **检查映射值**：确认这个 Key 对应的值（例如 `default`），是否和 Seata Server 启动时注册的集群名一致（默认是 `default`）
+
+
+
+**逻辑组名 -> (通过配置中心) -> 集群名 -> (通过注册中心) -> 实例 IP**
+
+
+
+##### 4.4 数据库表结构准备 (`undo_log` 表)
+
+在 AT 模式下，Seata 需要记录数据的“前置镜像”和“后置镜像”来实现自动回滚。这些数据不是存在内存里，而是必须持久化到 **业务数据库** 中
+
+这就要求：**每一个参与分布式事务的业务数据库（如 OrderDB, StorageDB），都必须创建这张 `undo_log` 表**
+
+
+
+###### 1. 核心作用
+
+- **存什么？**：存储 SQL 执行前的数据快照（Before Image）和执行后的数据快照（After Image）
+- **谁来存？**：Seata 的代理数据源 (`DataSourceProxy`) 会在业务 SQL 执行的同一个本地事务中，自动插入这条 Log
+- **怎么用？**：
+  - **提交时**：异步删除这条 Log
+  - **回滚时**：读取这条 Log，生成反向 SQL 执行补偿
+
+
+
+###### 2. 建表脚本 (SQL Script)
+
+在你的 **每一个微服务对应的数据库** 中执行以下 SQL
+
+> **注意**：这不是在 Seata Server 的数据库里建，而是在你的业务库（如 `order_db`, `stock_db`）里建！
+
+```sql
+-- 注意：这是 MySQL 的脚本
+-- 每个业务库（OrderDB, StockDB, AccountDB）都要执行
+CREATE TABLE `undo_log` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `branch_id` bigint(20) NOT NULL COMMENT '分支事务ID',
+  `xid` varchar(100) NOT NULL COMMENT '全局事务ID',
+  `context` varchar(128) NOT NULL COMMENT '上下文',
+  `rollback_info` longblob NOT NULL COMMENT '回滚信息(存镜像数据)',
+  `log_status` int(11) NOT NULL COMMENT '状态',
+  `log_created` datetime NOT NULL COMMENT '创建时间',
+  `log_modified` datetime NOT NULL COMMENT '修改时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `ux_undo_log` (`xid`,`branch_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8;
+```
+
+
+
+###### 3. 避坑指南
+
+1. **表名大小写**：
+
+   - Seata 默认查找的表名是 `undo_log`（小写）
+
+     如果你的数据库配置了大小写敏感，或者你想改表名，需要在 `application.yml` 中配置 `seata.client.undo.log-table`
+
+     但 **强烈建议保持默认**
+
+2. **序列化问题**：
+
+   - `rollback_info` 字段存储的是二进制数据（默认用 Jackson 序列化）
+
+     请确保数据库该字段类型是 `longblob` 或足够大的 `blob`，否则复杂对象的镜像数据可能会截断导致无法回滚
+
+3. **多数据源**：如果你的微服务使用了多数据源（Dynamic Datasource），**每一个数据源** 对应的物理库里，都要有这张表
+
+
+
+
+
+所有的准备工作彻底完成：
+
+1. **TC (Server)**：部署好了，配置进 Nacos 了
+2. **TM/RM (Client)**：依赖加了，配置连上 TC 了
+3. **DB (Resource)**：`undo_log` 表建好了
+
+
+
+#### 5. AT 模式原理
+
+- AT (Automatic Transaction) 模式是 Seata 独创的模式，它的核心理念是：**对业务无侵入**
+
+  - 你只需要在代码上加一个 `@GlobalTransactional` 注解，Seata 就能在底层自动帮你完成分布式事务的协调
+
+  - 它本质上是一个 **改进版的两阶段提交 (2PC)** 协议
+
+
+
+##### 5.1 第一阶段：核心魔法
+
+在第一阶段，Seata 的代理数据源 (`DataSourceProxy`) 会“劫持”你的业务 SQL，在本地事务提交前，悄悄做了一堆事情
+
+
+
+**执行流程（以 `UPDATE product SET stock = stock - 1 WHERE id = 1` 为例）：**
+
+1. **解析 SQL (Parse)**：
+
+   - Seata 拦截到 SQL，解析出要更新的表是 `product`，条件是 `id = 1`
+
+     
+
+2. **前置镜像 (Before Image)**：
+
+   - Seata 生成一条查询语句：`SELECT * FROM product WHERE id = 1 FOR UPDATE`
+   - 执行查询，保存当前数据（假设 stock=100）。这叫“前置镜像”
+
+   
+
+3. **执行业务 SQL (Execute)**：
+
+   - 执行你的业务 SQL：`stock` 变成了 99
+
+   
+
+4. **后置镜像 (After Image)**：
+
+   - Seata 再次查询：`SELECT * FROM product WHERE id = 1`
+   - 保存更新后的数据（stock=99）。这叫“后置镜像”
+
+   
+
+5. **插入回滚日志 (Undo Log)**：
+
+   - Seata 将 前置镜像、后置镜像、SQL 语句信息 打包成一条二进制数据
+   - 插入到 `undo_log` 表中
+
+   
+
+6. **提交前卫士：全局锁检查 (Global Lock Check)**：
+
+   - **关键点**：在提交本地事务前，RM 会拿着 `product` 表 `id=1` 这行数据的“主键值”，去 TC 申请 **全局锁**
+   - *如果不加锁会怎样？* 别的分布式事务可能会脏写这行数据
+   - 如果拿不到锁，RM 会重试；如果一直拿不到，抛异常回滚
+
+   
+
+7. **本地提交 (Local Commit)**：
+
+   - 业务数据的更新 + `undo_log` 的插入，在同一个本地事务中提交
+   - **注意**：此时数据库里的数据 **已经变了**（stock=99），且锁已经释放了
+
+
+
+##### 5.2 第二阶段：决议与执行
+
+第一阶段结束后，TM 向 TC 发起最终决议。根据第一阶段的汇报情况，TC 会指挥所有 RM 走两条截然不同的路
+
+
+
+###### 情况 A：全局提交
+
+如果所有微服务的一阶段都成功了，TM 发起提交请求
+
+1. **指令下达**：TC 向所有 RM 发送 `Branch Commit` 请求
+
+2. **响应**：RM 收到请求后，直接把这个请求放入一个 **异步队列**，然后立马给 TC 返回“成功”
+
+   - *为什么这么快？* 因为一阶段本地事务已经真的提交了，数据已经是 99 了，不需要再做任何数据库操作来“确认”
+
+   
+
+3. **异步清理**：RM 的后台线程会批量消费这个队列，找到对应的 `undo_log` 记录，直接 **删除**
+
+   - *逻辑*：既然事务成功了，就不需要后悔药了，删了省空间
+
+   
+
+**特点**：**异步、极快**。这是 Seata 高性能的核心原因
+
+###### 情况 B：全局回滚
+
+如果任何一个微服务报错了（抛出异常），TM 发起回滚请求
+
+1. **指令下达**：TC 向所有 RM 发送 `Branch Rollback` 请求
+2. **查找日志**：RM 通过 XID 和 BranchID，去 `undo_log` 表里找到对应的记录
+3. **数据校验 (脏写检查)**：
+   - RM 拿出 `undo_log` 里的 `After Image`（后置镜像，记录了当时改成 99 的样子）
+   - RM 查询数据库当前的实际值
+   - **对比**：如果 `当前值 == After Image`，说明中间没人动过数据，可以安全回滚
+4. **反向补偿**：
+   - RM 根据 `Before Image`（前置镜像，stock=100）和 `After Image` 自动生成反向 SQL
+   - SQL 逻辑类似：`UPDATE product SET stock = 100 WHERE id = 1`
+5. **执行回滚**：执行这条反向 SQL，把数据改回去
+6. **清理与提交**：删除 `undo_log`，提交本地事务，向 TC 汇报“回滚完毕”
+
+**特点**：**同步、补偿**。
+
+
+
+##### 5.3 AT 模式 vs XA 模式
+
+| 特性         | Seata AT (AP 变种)            | Seata XA (传统 CP)           |
+| ------------ | ----------------------------- | ---------------------------- |
+| **数据库锁** | **短**。一阶段提交后立马释放  | **长**。直到二阶段结束才释放 |
+| **并发性能** | **高**。不阻塞其他业务        | **低**。强一致但阻塞         |
+| **回滚原理** | **反向 SQL 补偿** (Undo Log)  | **数据库原生回滚**           |
+| **一致性**   | **最终一致性** (中间有软状态) | **强一致性** (ACID)          |
+
+
+
+#### 6. 核心注解：`@GlobalTransactional`
+
+这是 Seata 最核心的注解，它的作用是 **定义全局事务的边界**。 一旦方法上加了这个注解，当前微服务就变成了 **TM (事务发起者)**
+
+
+
+##### 6.1 注解参数速查
+
+请像背诵 `@Transactional` 一样熟悉这些参数，因为生产环境出的问题（如锁超时、不回滚），往往就是参数没配对
+
+**全路径**：`io.seata.spring.annotation.GlobalTransactional`
+
+| 参数名            | 类型          | 默认值      | 作用详解                                                     | 生产建议                                                     |
+| ----------------- | ------------- | ----------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| **timeoutMills**  | `int`         | 60000 (60s) | **全局事务超时时间**。<br />如果整个链路（所有微服务调用加起来）超过这个时间，TC 会强制触发全局回滚 | **务必设置**。<br />建议根据业务链路长度设定（如 5000ms）。默认 60s 太长，一旦网络卡顿，会长时间占用全局锁，导致高并发下其他事务排队卡死 |
+| **name**          | `String`      | ""          | **全局事务名称**<br />用于在 Seata 控制台或日志中追踪事务。  | **建议格式**：`应用名-业务动作`（如 `order-create-tx`）。当线上出 bug 时，拿着这个名字去日志里搜，效率翻倍 |
+| **rollbackFor**   | `Class[]`     | `{}`        | **指定回滚异常**<br />指定哪些异常类触发全局回滚。默认情况下，任何 `Throwable` 都会触发回滚 | 建议显式指定 `Exception.class` 或自定义业务异常基类，防止遗漏。 |
+| **noRollbackFor** | `Class[]`     | `{}`        | **指定不回滚异常**<br />即使抛出这些异常，也不回滚           | 用于某些允许失败的非核心业务场景（例如：发送积分通知失败，但不影响下单主流程）。 |
+| **propagation**   | `Propagation` | `REQUIRED`  | **传播行为**<br />目前 Seata 仅支持 `REQUIRED`（默认）、`REQUIRES_NEW`、`NOT_SUPPORTED` 等几种 | 绝大多数场景使用默认值即可。不要与 Spring 的传播行为混淆，Seata 的传播主要控制是否开启新的全局 XID。 |
+
+
+
+##### 6.2 标准代码示例
+
+这是一个最经典的分布式事务场景：**用户下单**
+
+- **OrderService (TM)**：事务发起者
+- **StorageService (RM)**：扣减库存
+- **AccountService (RM)**：扣减余额
+
+只要在 `OrderService` 的入口方法加上注解，剩下的一切（XID 传递、分支注册、提交回滚）都由 Seata 自动完成
+
+###### 1. 业务代码实现
+
+```java
+@Service
+public class OrderServiceImpl implements OrderService {
+
+    @Autowired
+    private StorageClient storageClient; // Feign 客户端，远程调用库存
+    @Autowired
+    private AccountClient accountClient; // Feign 客户端，远程调用账户
+    @Autowired
+    private OrderMapper orderMapper;     // 本地 DAO，操作订单库
+
+    /**
+     * 下单核心接口：开启全局事务
+     * * @GlobalTransactional 参数解析：
+     * 1. name: "create-order-tx" -> 给这个事务起个名，排查日志用。
+     * 2. timeoutMills: 300000 -> 设置超时为 5分钟 (调试期设长一点，生产环境建议 5000ms)。
+     * 3. rollbackFor: Exception.class -> 只要抛出 Exception 就回滚 (含 Checked Exception)。
+     */
+    @Override
+    @GlobalTransactional(name = "create-order-tx", timeoutMills = 300000, rollbackFor = Exception.class)
+    public void create(Order order) {
+        
+        LOGGER.info("-----> [1] 开始新建订单");
+        // 1. 本地数据库操作 (RM1)
+        // 在 undo_log 中记录：插入订单的前后镜像
+        orderMapper.create(order);
+
+        LOGGER.info("-----> [2] 订单微服务开始调用库存，做扣减 Count");
+        // 2. 远程调用库存服务 (RM2)
+        // Seata 拦截器会自动把 XID 放入 Feign 请求头：Header map.put("TX_XID", "xxx")
+        storageClient.decrease(order.getProductId(), order.getCount());
+
+        LOGGER.info("-----> [3] 订单微服务开始调用账户，做扣减 Money");
+        // 3. 远程调用账户服务 (RM3)
+        // 同样传递 XID，账户服务作为 RM3 加入事务
+        accountClient.decrease(order.getUserId(), order.getMoney());
+
+        LOGGER.info("-----> [4] 订单结束，准备提交");
+        
+        // 4. 模拟异常场景：触发全局回滚
+        // 如果商品ID是 "ErrorProduct"，手动抛出异常
+        if ("ErrorProduct".equals(order.getProductId())) {
+             throw new RuntimeException("模拟业务异常，触发 Seata 全局回滚！");
+        }
+        
+        // 如果代码顺利走到这里，没有任何异常抛出
+        // TM (Transaction Manager) 会向 TC 发送 GlobalCommit 请求
+    }
+}
+```
+
+
+
+###### 2. 下游服务需要加注解吗？(FAQ)
+
+这是一个新手最高频的问题：*“StorageService 和 AccountService 的方法上，需要加 `@GlobalTransactional` 吗？”*
+
+**答案：不需要，也不建议加。**
+
+- **原因**：
+  - `@GlobalTransactional` 的作用是 **开启一个新的全局事务**（生成新的 XID）
+  - 下游服务是 **参与者**，它们只需要通过 XID 加入已有的事务即可。Seata 的自动配置（`DataSourceProxy`）会自动识别上下文中的 XID 并注册分支
+- **例外**：除非下游服务本身也需要作为一个独立的入口被其他系统调用，且需要独立开启事务。但在当前链路中，它们只是 RM
+
+
+
+###### 3. 事务传播机制
+
+上述代码执行时，XID 是如何流转的？
+
+1. **OrderService**：`@GlobalTransactional` 拦截 -> 向 TC 申请 XID（例如 `1001`）
+2. **OrderService -> StorageService**：Feign 拦截器将 `XID=1001` 放入 HTTP Header
+3. **StorageService**：
+   - Spring MVC 拦截器从 Header 取出 XID，绑定到本地 `RootContext`
+   - 执行 SQL 时，发现 `RootContext` 有 XID，于是向 TC 注册分支事务（属于 `1001`）
+4. **异常回滚**：
+   - OrderService 抛出异常
+   - TM 捕获异常，向 TC 发送 `GlobalRollback(XID=1001)`
+   - TC 通知 StorageService 和 AccountService 进行回滚
+
+
+
+##### 6.3 避坑指南
+
+Seata 的 `@GlobalTransactional` 基于 Spring AOP 实现，如果你不了解 AOP 的局限性，很容易写出“无效代码”
+
+###### 1. 巨坑一：AOP 动态代理失效
+
+- **现象**：在同一个类中，方法 A（无注解）调用方法 B（有 `@GlobalTransactional`），事务不生效
+
+- **错误代码示例**：
+
+  ```java
+  @Service
+  public class OrderServiceImpl {
+  
+      public void createOrder() {
+          // 错误！这里相当于 this.doTransaction()
+          // 绕过了 Spring 的代理对象，直接调用了原始对象的方法
+          // 导致切面逻辑没执行，XID 根本没生成
+          doTransaction(); 
+      }
+  
+      @GlobalTransactional // 这个注解完全废了
+      public void doTransaction() {
+          // ...
+      }
+  }
+  ```
+
+- **原理**：Spring AOP 是基于代理模式的。只有通过代理对象调用方法，拦截器才会生效。`this.xxx()` 是对象内部调用，不走代理
+
+- **解决方案**：
+
+  1. 将带有 `@GlobalTransactional` 的方法抽离到另一个 Service 类中
+  2. （不推荐）注入自己 (`@Autowired private OrderService self`)，然后 `self.doTransaction()`
+
+
+
+###### 2. 巨坑二：异常被“吃掉”
+
+- **现象**：代码里明明报错了，控制台也打印异常堆栈了，但 Seata 就是不回滚，数据库里产生脏数据
+
+- **错误代码示例**：
+
+  ```java
+  @GlobalTransactional
+  public void createOrder() {
+      try {
+          storageClient.decrease(); // 这里抛出了异常
+      } catch (Exception e) {
+          e.printStackTrace(); // 只是打印了日志，吞掉了异常
+          // TM 认为方法正常执行结束，于是发起 Global Commit
+      }
+  }
+  ```
+
+- **原理**：Seata 的 TM（事务管理器）是靠捕获方法抛出的异常来感知失败的。如果你把异常捕获并消化了，TM 会认为“一切安好”，从而发起提交
+
+- **解决方案**：
+
+  - **原则**：要么别 `catch`，要么 `catch` 之后必须 `throw`
+
+  - **修正**：
+
+    ```java
+    catch (Exception e) {
+        e.printStackTrace();
+        throw e; // 必须再次抛出！
+    }
+    ```
+
+  - 或者使用 `GlobalTransactionContext.reload(RootContext.getXID()).rollback()` 手动回滚（不推荐，代码侵入性高）
+
+
+
+###### 3. 巨坑三：全局锁等待超时
+
+- **现象**：高并发场景下，频繁报错 `GlobalLockWaitTimeoutException`，系统吞吐量急剧下降
+- **原因**：
+  - **热点数据竞争**：多个全局事务同时尝试修改同一行数据（例如秒杀扣减同一商品的库存）
+  - **锁持有时间过长**：
+    - 你的 `@GlobalTransactional` 方法里执行了耗时的操作（如发邮件、高延迟的 RPC），导致一直占着全局锁不释放，后面的事务拿不到锁只能排队，超时就报错
+- **解决方案**：
+  - **优化链路**：把非数据库操作（发邮件、计算密集型逻辑）移出事务范围，尽量缩短持有锁的时间
+  - **调整参数**：适当增加 `seata.service.client.global-lock-retry-interval`（重试间隔）和 `retries`（重试次数），但这只是治标
+  - **架构优化**：对于极致热点（如秒杀），不要直接用数据库+Seata，建议上 Redis
+
+
+
+#### 7. AT 模式下的隔离性与全局锁
+
+在 AT 模式中，Seata 为了高性能，做了一个大胆的决定：**一阶段本地事务提交后，直接释放数据库锁**
+
+- 这带来了一个巨大的风险：如果二阶段还没执行，另一个线程（可能是别的全局事务，也可能是普通的本地事务）来修改这行数据，会发生什么？
+  - 这就是 **隔离性 (Isolation)** 问题
+
+
+
+##### 7.1 写隔离 —— 防止脏写
+
+###### 1. 什么是脏写？
+
+假设我们有两个全局事务：事务 A 和 事务 B，它们都想修改 `id=1` 的余额（初始值 100）
+
+1. **事务 A (XID=1001)**：
+   - 执行 `UPDATE balance = 90`
+   - **一阶段提交**，释放数据库锁。此时数据库里是 90
+2. **事务 B (XID=1002)**：
+   - 执行 `UPDATE balance = 80`
+   - **一阶段提交**，释放数据库锁。此时数据库里是 80
+3. **事务 A 回滚**：
+   - 事务 A 发生异常，需要回滚
+   - 它拿出自己的 Undo Log（Before Image 是 100）
+   - 它执行反向 SQL：`UPDATE balance = 100`
+   - **结果**：数据库变成了 100。**事务 B 的更新（80）彻底丢失了！**
+
+这就是脏写。它会导致数据永久性错误
+
+
+
+###### 2. Seata 的解决方案：全局锁
+
+为了防止这种情况，Seata 引入了 **全局锁** 机制。这是一把由 TC（服务端）维护的逻辑锁
+
+**核心流程：**
+
+1. **申请锁**：
+
+   - RM 在**一阶段提交本地事务之前**，必须拿到 `table:pk`（表名+主键）的信息
+   - RM 去 TC 申请该行数据的全局锁
+
+   
+
+2. **持有与等待**：
+
+   - **如果拿到了**：说明没有人在操作这行数据，允许提交本地事务
+   - **如果没拿到**（说明有别的全局事务正在占着）：RM 会进行重试（默认重试 30 次，间隔 10ms）
+   - **如果超时**：抛出 `GlobalLockWaitTimeoutException`，回滚本地事务
+
+   
+
+3. **释放锁**：
+
+   - 只有等到 **二阶段（全局提交或全局回滚）彻底完成** 后，TC 才会释放这把锁
+
+
+
+**结论**： 通过“提交前抢锁”机制，Seata 保证了：**两个全局事务之间，绝对不会发生脏写。** 因为谁先抢到全局锁，谁才能提交本地事务
+
+
+
+##### 7.2 读隔离
+
+在数据库层面，ACID 中的 I (Isolation) 通常指“读已提交”或“可重复读”。 但在 Seata AT 模式中，情况变得特殊
+
+###### 1. 默认状态：读未提交
+
+**现状**：
+
+- 全局事务 A 修改了数据（100 -> 90），并在 **一阶段提交了本地事务**
+- 此时，全局事务 A 还没结束（可能在等其他分支，或者正在二阶段处理中）
+- 数据库里的数据 **已经是 90 了 **
+
+**脏读风险**：
+
+- 如果此时有一个普通请求（或者另一个全局事务 B）来查询余额
+- 它会读到 **90**
+- **万一** 全局事务 A 后来回滚了（90 -> 100），那么刚才读到的 90 就是 **脏数据**
+
+**Seata 的选择**：
+
+- **默认情况** 下，Seata 是 **允许脏读** 的
+- **理由**：为了极致的性能。绝大多数业务场景（如查看商品详情、用户信息）是可以容忍短暂的数据不一致的
+
+
+
+###### 2. 进阶需求：如何实现“读已提交”？
+
+如果你的业务场景（比如资金核算）要求 **必须读到最终提交的数据**，不能读中间状态，怎么办？
+
+Seata 提供了基于 `SELECT FOR UPDATE` 的代理机制
+
+**代码写法**：
+
+```java
+@GlobalTransactional // 必须开启全局事务，或者使用 @GlobalLock
+public void checkBalance() {
+    // 必须使用 FOR UPDATE 语句
+    // 只有这种特定的 SQL，Seata 才会去检查全局锁
+    Account account = accountMapper.selectByIdForUpdate(1L);
+}
+```
+
+**底层原理**：
+
+1. **拦截**：Seata 代理数据源拦截到 `SELECT ... FOR UPDATE`
+2. **抢锁检查**：RM 会拿着主键去 TC 检查：**“这行数据有没有被加全局锁？”**
+   - **有锁**：说明有一个全局事务正在改它（还没结束）。RM 会**等待**，直到锁释放
+   - **无锁**：说明没有全局事务在改它，或者已经结束了。RM 执行查询
+3. **结果**：通过等待全局锁释放，保证了读出来的数，一定是全局事务提交后的最终结果
+
+
+
+**代价**：
+
+- **性能损耗**：查询也要去 TC 查锁，会有网络开销
+- **阻塞风险**：如果写事务很慢，读请求也会被卡住
+
+
+
+###### 3. 什么是 @GlobalLock 注解？
+
+有时候，我们想查询数据，或者想执行一个不涉及分布式事务的本地更新，但又想 **避开** 正在执行的全局事务（利用全局锁互斥）
+
+这时可以使用 `@GlobalLock`
+
+- **作用**：它 **不开启** 全局事务（不生成 XID，不写 Undo Log），但在执行 SQL 前会去 **申请/检查全局锁**
+- **适用场景**：
+  - **安全读**：配合 `SELECT FOR UPDATE`，实现高性能的“读已提交”
+  - **安全写**：一个普通的本地 update，加上这个注解，就能防止跟正在跑的 Seata 全局事务发生脏写
+
+```java
+// 这是一个普通的本地业务方法，不参与全局事务
+@GlobalLock(retryInterval = 100, retries = 50)
+public void safeUpdate() {
+    // 执行前会去检查全局锁。
+    // 如果有别的全局事务在改这行数据，我会等它完事了再改。
+    // 从而避免了“由于我没加全局锁，导致我覆盖了它的回滚”的问题。
+    accountMapper.updateById(...);
+}
+```
+
+
+
+#### 8. TCC 模式原理与接口设计
+
+AT 模式虽然好用（自动挡），但它并不是万能的。在某些特殊场景下，我们必须切换到 TCC 模式（手动挡）
+
+##### 8.1 为什么需要 TCC？(Why)
+
+AT 模式的核心依赖于 **JDBC 数据源代理** 和 **SQL 解析**。它的工作原理是拦截你的 SQL，去数据库查镜像，然后生成 Undo Log
+
+这就注定了 AT 模式在以下三个场景会 **彻底失效**，必须使用 TCC：
+
+###### 1. 非关系型数据库 (NoSQL)
+
+- **场景**：你的业务不是操作 MySQL/Oracle，而是操作 **Redis**、**MongoDB**、**Elasticsearch** 甚至 **HBase**
+- **痛点**：AT 模式根本解析不了 Redis 的 `set key value` 命令，也不知道怎么去 Redis 里查“前置镜像”和“后置镜像”，更无法自动生成回滚命令
+- **解决**：TCC 允许你手动写 `cancel` 方法。比如 Try 阶段 `set key value`，Cancel 阶段你可以手动写 `del key`
+
+###### 2. 追求极致性能 (High Performance)
+
+- **场景**：大促秒杀、核心高频交易系统
+
+- **痛点**：AT 模式虽然快，但它毕竟有“黑盒”开销：
+
+  1. SQL 解析（CPU 消耗）
+  2. 查询前置镜像（一次 DB Select）
+  3. 查询后置镜像（一次 DB Select）
+  4. 插入 Undo Log（一次 DB Insert）
+  5. 申请全局锁（网络交互）
+
+  - 这些额外步骤会导致写性能下降 30%~50%
+
+- **解决**：TCC 没有任何“黑盒”操作。Try 就是一个普通的方法调用，性能完全取决于你的代码写得有多快（比如直接操作内存）
+
+
+
+###### 3. 跨系统/API 调用 (Cross-System API)
+
+- **场景**：你的业务逻辑是 **调用第三方接口**
+  - 例如：调用支付宝的支付接口、调用物流公司的发货接口、调用遗留系统的 API
+- **痛点**：你连人家的数据库都连不上，更别提让 Seata 去代理人家的数据源了
+- **解决**：TCC 是唯一解。
+  - Try：调用 `pay()` 接口
+  - Confirm：不做操作（或调用确认接口）
+  - Cancel：调用 `refund()` 退款接口
+
+
+
+##### 8.2 TCC 三阶段模型
+
+TCC 是 **Try - Confirm - Cancel** 的缩写。这也是 DTP 模型中两阶段提交（2PC）在业务层的具体实现
+
+你需要为每一个业务功能（比如“扣减余额”）手动编写三个方法
+
+
+
+###### 1. 一阶段：Try (尝试/预留)
+
+这是 TCC 最核心的一步。它的职责是：**检测** + **预留**
+
+- **业务检查：
+
+  - 检查前置条件是否满足。例如：账户余额是否充足？商品库存够不够？
+
+- **资源预留：
+
+  - **关键点**：不要直接把钱扣掉，而是把它“冻结”起来
+  - 这样做的目的是为了**隔离性**。一旦冻结，别的事务就无法使用这笔钱，但原本的余额看起来减少了（避免了超卖）
+
+- **SQL 示例 (扣减 100 元)**：
+
+  - 假设表结构：`id`, `balance` (可用余额), `frozen` (冻结金额)
+  - **逻辑**：余额 -100，冻结 +100
+
+  ```java
+  UPDATE account 
+  SET balance = balance - 100, 
+      frozen = frozen + 100 
+  WHERE id = 1 AND balance >= 100; -- 顺便做了余额检查
+  ```
+
+
+
+###### 2. 二阶段：Confirm (确认/提交)
+
+如果全局事务中所有的 Try 阶段都成功了，TM 会通知执行 Confirm
+
+- **职责**：真正执行业务，不做任何业务检查
+
+- **逻辑**：使用 Try 阶段预留的资源（冻结金额）
+
+- **幂等性要求**：**极高**。因为网络中断时 TC 会重试调用 Confirm，必须保证执行 1 次和执行 10 次结果一样
+
+- **SQL 示例**：
+
+  - **逻辑**：把冻结的那 100 元真正扣掉
+
+  ```sql
+  UPDATE account 
+  SET frozen = frozen - 100 
+  WHERE id = 1;
+  ```
+
+  - *注：这里不需要判断 `balance` 了，因为 Try 阶段已经锁定资源了*
+
+
+
+###### 3. 二阶段：Cancel (取消/回滚)
+
+如果任何一个 Try 阶段失败了，TM 会通知所有成功的分支执行 Cancel
+
+- **职责**：释放 Try 阶段预留的资源
+
+- **逻辑**：把“冻结”的钱还给“余额”
+
+- **幂等性要求**：**极高**
+
+- **SQL 示例**：
+
+  - **逻辑**：余额 +100，冻结 -100
+
+  ```sql
+  UPDATE account 
+  SET balance = balance + 100, 
+      frozen = frozen - 100 
+  WHERE id = 1;
+  ```
+
+
+
+###### 4. 总结：数据视角的变化
+
+通过 TCC，我们将原本的一个动作拆解了：
+
+| 阶段        | 动作 | 可用余额 (balance) | 冻结金额 (frozen) | 实际总资产                  |
+| ----------- | ---- | ------------------ | ----------------- | --------------------------- |
+| **初始**    | -    | 1000               | 0                 | 1000                        |
+| **Try**     | 挪用 | 900                | 100               | 1000 (钱还在，只是不能用了) |
+| **Confirm** | 消耗 | 900                | 0                 | 900 (真正扣款)              |
+| **Cancel**  | 归还 | 1000               | 0                 | 1000 (恢复原状)             |
+
+
+
+##### 8.3 核心注解与接口定义 (API)
+
+在 Seata TCC 模式中，你不能随意写三个方法。你需要定义一个接口，并通过特定的注解告诉 Seata：“这是一个 TCC 资源，Try 是谁，Confirm 是谁，Cancel 是谁”
+
+###### 1. 核心注解清单
+
+- **`@LocalTCC`**
+
+  - **位置**：加在 **接口**上（推荐）或实现类上
+  - **作用**：告诉 Seata，这个类是一个 TCC 参与者，需要被代理拦截
+
+  
+
+- **`@TwoPhaseBusinessAction`**
+
+  - **位置**：加在 **Try 方法** 上
+
+  - **作用**：定义 TCC 的元数据
+
+  - **核心属性**：
+
+    - `name`: **全局唯一的 TCC Bean 名称**。千万不能重复，TC 靠它来定位资源
+    - `commitMethod`: 指定 Confirm 方法的方法名（字符串）
+    - `rollbackMethod`: 指定 Cancel 方法的方法名（字符串）
+
+    
+
+- **`BusinessActionContext`**
+
+  - **位置**：作为 Confirm 和 Cancel 方法的 **第一个参数**
+  - **作用**：上下文传递。因为 Confirm/Cancel 是由 TC 异步调用的，它们无法直接获取 Try 方法的入参
+
+  
+
+- **`@BusinessActionContextParameter`**
+
+  - **位置**：加在 **Try 方法的入参** 上
+  - **作用**：将该参数放入上下文（Context）中，以便在二阶段（Confirm/Cancel）中通过 `actionContext.getActionContext("paramName")` 取出来
+
+
+
+###### 2. 标准接口定义示例
+
+假设我们要实现一个“扣减库存”的 TCC 接口
+
+```java
+import io.seata.rm.tcc.api.BusinessActionContext;
+import io.seata.rm.tcc.api.BusinessActionContextParameter;
+import io.seata.rm.tcc.api.LocalTCC;
+import io.seata.rm.tcc.api.TwoPhaseBusinessAction;
+
+@LocalTCC // 1. 标记这是一个 TCC 接口
+public interface StorageTccService {
+
+    /**
+     * 一阶段方法：Try
+     * * @param productId 商品ID
+     * @param count     扣减数量
+     * @return boolean  是否成功
+     */
+    @TwoPhaseBusinessAction(
+        name = "StorageTccAction", // 必须全局唯一！
+        commitMethod = "commit",   // 指向下面的 commit 方法
+        rollbackMethod = "rollback" // 指向下面的 rollback 方法
+    )
+    boolean prepare(BusinessActionContext actionContext,
+                    @BusinessActionContextParameter(paramName = "productId") Long productId,
+                    @BusinessActionContextParameter(paramName = "count") int count);
+
+    /**
+     * 二阶段方法：Confirm (确认)
+     * * @param actionContext 上下文，可以从中取出 Try 阶段传进来的 productId 和 count
+     * @return boolean
+     */
+    boolean commit(BusinessActionContext actionContext);
+
+    /**
+     * 二阶段方法：Cancel (取消)
+     * * @param actionContext 上下文
+     * @return boolean
+     */
+    boolean rollback(BusinessActionContext actionContext);
+}
+```
+
+
+
+###### 3. 参数传递的奥秘
+
+初学者最容易懵的是：*“Confirm 方法里怎么知道要扣哪个商品的库存？”*
+
+- **Try 阶段**： 
+
+  - 当你调用 `prepare(ctx, 1001L, 5)` 时，Seata 会看到 `@BusinessActionContextParameter` 注解，
+
+    于是把 `productId=1001L` 和 `count=5` 存入 `actionContext`（本质是一个 Map），并持久化到 TC
+
+- **Confirm/Cancel 阶段**： TC 调用 `commit` 方法时，会将这个 `actionContext` 还原并传回来。 你只需要：
+
+  ```java
+  Long productId = ((Number) actionContext.getActionContext("productId")).longValue();
+  int count = ((Number) actionContext.getActionContext("count")).intValue();
+  ```
+
+
+
+#### 9. TCC 三大异常控制
+
+TCC 模式最大的难点不在于写业务逻辑，而在于 **处理 RPC 带来的网络混沌**
+
+- TC（服务端）是通过 RPC 远程调用你的 Try、Confirm、Cancel 方法的，所有的异常都源于 **网络延迟** 或 **丢包**
+
+##### 9.1 异常现象复现与危害
+
+###### 1. 异常一：空回滚
+
+- **现象**：TC 调用了 `Cancel` 方法，但是 `Try` 方法根本没执行（或者没执行成功）
+- **场景复现**：
+  1. TM 请求 TC 开启全局事务
+  2. TM 调用分支服务 A 的 Try 接口
+  3. **异常**：RPC 网络中断，Try 请求没发出去；或者 Try 方法刚进去就抛异常了
+  4. TM 感知到失败，向 TC 发起全局回滚
+  5. TC 命令所有分支执行 `Cancel`
+  6. **结果**：分支 A 收到了 Cancel 指令，但它从来没收到过 Try。这就叫“空回滚”
+- **危害**：如果不做判断直接执行 Cancel（比如 `UPDATE balance = balance + 100`），就会**凭空给用户加钱**
+
+
+
+###### 2. 异常二：幂等控制
+
+- **现象**：TC 重复调用了 `Confirm` 或 `Cancel` 方法
+- **场景复现**：
+  1. TC 发送 Confirm 指令
+  2. 分支 A 执行成功，返回结果
+  3. **异常**：结果返回时网络丢包，TC 没收到响应
+  4. TC 认为超时，触发 **重试机制**，再次发送 Confirm 指令
+- **危害**：如果 Confirm 是扣款操作，重复调用会导致 **用户被扣两次钱**
+
+
+
+###### 3. 异常三：悬挂
+
+这是最烧脑的一个，也是空回滚的“变种”，非常容易被忽略
+
+- **现象**：`Cancel` 比 `Try` 先执行
+- **场景复现**：
+  1. TM 调用 Try，**网络拥堵**，请求卡在路上（比如 GC 停顿了 10秒）
+  2. TM 等不到响应，认为超时失败，向 TC 发起全局回滚
+  3. TC 调用 Cancel。分支服务执行 Cancel（此时由于还没 Try，逻辑上判定为空回滚，返回成功）
+  4. **异常**：这时候，那个卡在路上的 Try 请求终于到了！
+  5. 分支服务执行 Try，预留了资源（冻结了钱）
+  6. **结果**：全局事务在 TC 那边已经结束了（回滚了），但分支服务这里却刚刚冻结了一笔钱。这笔钱永远不会被 Confirm 或 Cancel，像吊死鬼一样挂在那里
+- **危害**：资源被**永久冻结**，导致资金泄露（钱没丢，但拿不出来用了）
+
+
+
+##### 9.2 终极解决方案：TCC Fence 机制
+
+要同时解决空回滚、幂等、悬挂这三个问题，最稳妥的办法是利用 **数据库的唯一性约束** 和 **状态机**。Seata 将这种机制命名为 **TCC Fence (围栏)**
+
+###### 1. 物理基础：tcc_fence_log 表
+
+首先，你需要在**业务数据库**中创建一张特殊的表。Seata 会利用这张表来记录每个分支事务的状态
+
+```sql
+-- Seata TCC Fence 专用表 (MySQL)
+CREATE TABLE `tcc_fence_log` (
+    `xid`           VARCHAR(128)  NOT NULL COMMENT '全局事务ID',
+    `branch_id`     BIGINT(20)    NOT NULL COMMENT '分支事务ID',
+    `action_name`   VARCHAR(64)   NOT NULL COMMENT 'TCC Bean Name',
+    `status`        TINYINT(4)    NOT NULL COMMENT '状态: 1=Tried, 2=Committed, 3=RolledBack, 4=Suspended',
+    `gmt_create`    DATETIME(3)   NOT NULL COMMENT '创建时间',
+    `gmt_modified`  DATETIME(3)   NOT NULL COMMENT '修改时间',
+    PRIMARY KEY (`xid`, `branch_id`),
+    KEY `idx_gmt_modified` (`gmt_modified`),
+    KEY `idx_status` (`status`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+```
+
+
+
+###### 2. 自动化开启
+
+在 Seata 1.5.0+ 版本中，你不需要自己写 `if-else` 去查这张表。只需要在注解上开启一个开关：
+
+```java
+@LocalTCC
+public interface StorageTccService {
+
+    @TwoPhaseBusinessAction(
+        name = "StorageTccAction", 
+        commitMethod = "commit", 
+        rollbackMethod = "rollback",
+        useTccFence = true  // <--- 开启 TCC Fence 机制！
+    )
+    boolean prepare(BusinessActionContext actionContext, ...);
+}
+```
+
+开启后，Seata 代理对象会在调用你的 Try/Confirm/Cancel 方法 **之前** 和 **之后**，自动执行以下的防御逻辑
+
+
+
+
+
+###### 3. 底层原理
+
+即使 Seata 帮我们做了，作为架构师也必须理解它到底干了什么：
+
+**A. 防悬挂 (Anti-Suspension) —— Try 阶段**
+
+- **逻辑**：在执行 Try 业务 SQL 之前，先开启本地事务，插入一条记录 `status = TRIED`
+
+- **防御**：
+
+  - 如果插入成功 -> 正常执行业务
+
+  - 如果插入失败（主键冲突） -> 检查已存在的记录
+
+    - 如果发现状态是 `ROLLED_BACK` 或 `SUSPENDED`，说明 Cancel 已经执行过了（悬挂发生了）
+    - **动作**：直接抛出异常，阻止 Try 方法执行资源预留
+
+    
+
+**B. 防幂等 (Idempotency) —— Confirm/Cancel 阶段**
+
+- **逻辑**：在执行 Confirm/Cancel 之前，先查询记录
+
+- **防御**：
+
+  - 如果状态已经是 `COMMITTED`（在 Confirm 时）或 `ROLLED_BACK`（在 Cancel 时）
+  - **动作**：直接返回成功，不再执行业务逻辑
+
+  
+
+**C. 防空回滚 (Anti-Null Rollback) —— Cancel 阶段**
+
+- **逻辑**：在执行 Cancel 之前，通过 `xid` + `branch_id` 查询记录
+- **防御**：
+  - 如果记录**不存在**（说明 Try 没执行成功）
+  - **动作**：插入一条 `status = SUSPENDED` 的记录（为了防止后续 Try 又来了导致悬挂），然后直接返回成功
+
+
+
+###### 4. 总结
+
+TCC Fence 机制用一张表实现了完美的逻辑闭环：
+
+| 场景              | Fence 的处理动作                  | 结果                    |
+| ----------------- | --------------------------------- | ----------------------- |
+| **正常 Try**      | 插入 `TRIED` 记录                 | 成功                    |
+| **重复 Confirm**  | 查到 `COMMITTED` 记录             | 直接返回成功 (幂等)     |
+| **空回滚 Cancel** | 查不到记录 -> 插入 `SUSPENDED`    | 直接返回成功 (防空回滚) |
+| **悬挂 Try**      | 查到 `SUSPENDED` 记录 -> 插入失败 | 抛异常 (防悬挂)         |
+
+
+
+#### 10. XA 与 Saga 模式
+
+在 Seata 的版图中，AT 和 TCC 占据了 95% 的互联网应用场景。但在金融、账务等对 **强一致性** 要求极高的领域，XA 模式依然是不可替代的
+
+
+
+##### 10.1 XA 模式
+
+###### 1. 什么是 XA ?
+
+XA 是 X/Open 组织定义的一套 **分布式事务标准**
+
+- **核心特征**：它利用 **数据库本身**（MySQL, Oracle）提供的 2PC（两阶段提交）机制，而不是像 AT 模式那样在应用层模拟 2PC
+- **角色**：Seata 的 RM 此时不再是一个复杂的代理，它只是数据库 XA 接口的“搬运工”
+
+
+
+###### 2. XA vs AT
+
+很多同学容易混淆 XA 和 AT，因为它们都是 **2PC**（两阶段），且**代码都无侵入**（都用 `@GlobalTransactional`）
+
+但它们的底层逻辑完全相反：
+
+| 特性         | AT 模式 (默认)                                               | XA 模式                                                      |
+| ------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| **锁机制**   | **应用层逻辑锁** (全局锁)。数据库本地锁在一阶段提交后 **立即释放** | **数据库物理锁**。数据库本地锁一直 **持有**，直到二阶段结束才释放 |
+| **隔离性**   | **读未提交** (默认)。中间状态对外部可见                      | **序列化/强一致**。中间状态对外不可见 (阻塞)                 |
+| **并发性能** | **高**。锁持有时间短                                         | **低**。长事务会阻塞数据库连接，导致 TPS 骤降                |
+| **回滚方式** | **补偿** (Undo Log 反向 SQL)                                 | **原生 Rollback** (数据库机制)                               |
+
+
+
+###### 3. 如何切换到 XA 模式？
+
+Seata 的设计非常优雅，从 AT 切换到 XA，**不需要改哪怕一行 Java 代码**，只需要改配置
+
+**步骤一：修改数据源代理模式** 在 `application.yml` 中：
+
+```yaml
+seata:
+  data-source-proxy-mode: XA  # 默认是 AT，改为 XA 即可
+```
+
+**步骤二：代码保持不变** 依然使用 `@GlobalTransactional` 注解
+
+```java
+@GlobalTransactional // 此时它开启的就是 XA 分布式事务
+public void transfer() {
+    // 数据库操作...
+}
+```
+
+###### 4. 适用场景与避坑
+
+- **适用场景**：
+  - **金融核心**：如银行转账、清结算系统
+  - **旧系统迁移**：原本就是基于 XA 协议的旧系统，迁移到 Spring Cloud 架构
+  - **并发量低**：TPS 要求不高，但数据绝对不能错
+- **避坑指南**：
+  - **性能陷阱**：千万不要在电商下单等高并发场景用 XA，数据库连接池会被瞬间打满（因为锁一直不释放）
+  - **数据库支持**：必须确保你使用的数据库（如 MySQL 5.7+）和驱动程序支持 XA 协议
+
+
+
+##### 10.2 Saga 模式：长事务解决方案
+
+Saga 模式源于 1987 年的一篇学术论文，它的核心思想非常简单粗暴：**“一往无前，错了再退”**
+
+
+
+###### 1. 核心机制
+
+Saga 模式把一个长事务拆分成多个 **本地事务**（T1, T2, T3...）。 每个本地事务都有一个对应的 **补偿事务**（C1, C2, C3...）
+
+- **正向执行**：T1 -> T2 -> T3。如果都成功，事务结束
+- **失败回滚**：如果 T1 成功，T2 成功，但 **T3 失败** 了。Seata 会自动执行 C2 -> C1 来消除影响
+
+**Saga vs TCC 的区别（核心）：**
+
+- **TCC**：有 `Try` 阶段（预留资源）。先冻结，再扣款
+- **Saga**：**没有 `Try` 阶段**。直接扣款！
+  - T1 (扣款) -> C1 (退款)
+  - 因为没有预留动作，所以 Saga 对业务的侵入性比 TCC 低（不需要改数据库表结构加冻结字段），但隔离性也更差
+
+
+
+###### 2. 实现方式：状态机引擎
+
+在 Seata 中，Saga 模式不需要写 Java 代码来编排流程，而是通过 **JSON 文件** 定义一个状态机
+
+**示例 JSON (State Diagram)：**
+
+```js
+{
+    "Name": "buyGoods",
+    "StartState": "ReduceInventory",
+    "States": {
+        "ReduceInventory": {
+            "Type": "ServiceTask",
+            "ServiceName": "inventoryService",
+            "ServiceMethod": "reduce",
+            "CompensateState": "CompensateReduceInventory", // 指定回滚方法
+            "Next": "ReduceBalance"
+        },
+        "ReduceBalance": {
+            "Type": "ServiceTask",
+            "ServiceName": "balanceService",
+            "ServiceMethod": "reduce",
+            "CompensateState": "CompensateReduceBalance",
+            "Next": "Succeed"
+        },
+        "CompensateReduceInventory": {
+            "Type": "ServiceTask",
+            "ServiceName": "inventoryService",
+            "ServiceMethod": "compensateReduce"
+        }
+        // ... 其他补偿节点
+    }
+}
+```
+
+
+
+###### 3. 优缺点与适用场景
+
+| 特性         | 描述                                                         |
+| ------------ | ------------------------------------------------------------ |
+| **优点**     | 1. **高并发**：完全无锁。T1 提交了就是真提交了，不会锁表<br />2. **长流程友好**：适合那种耗时几分钟甚至几天的业务 |
+| **缺点**     | **隔离性极差**<br />因为 T1 提交后，其他事务立马能读到修改后的数据。如果 T1 后来回滚了，其他事务读到的就是脏数据。必须在业务层处理“脏读”后果 |
+| **适用场景** | 1. **老系统改造**：无法改造数据库接口，只能调 API<br />2. **长事务**：跨行转账、复杂的审批流、旅游OTA（订机票+订酒店+买门票） |
+
+
+
+#### 11. 生产环境最佳实践
+
+代码写得再好，如果服务端挂了，一切都是白搭。 Seata Server (TC) 作为分布式事务的协调核心，一旦单点故障，所有涉及分布式事务的业务都会阻塞甚至回滚
+
+##### 11.1 Seata 高可用部署方案
+
+在生产环境中，**绝对禁止 **使用 `file` 模式部署单节点 TC。你必须部署 TC 集群
+
+
+
+###### 1. 核心架构原理
+
+Seata 的高可用依赖于两个组件：
+
+- **共享存储**：所有的 TC 节点都连接 **同一个数据库**。这样，即使 TC-1 挂了，TC-2 也能从数据库里读到未完成的事务状态，继续处理
+- **注册中心**：所有的 TC 节点都注册到 **同一个 Nacos**。客户端（微服务）通过 Nacos 的服务发现机制，自动实现负载均衡和故障转移
+
+
+
+###### 2. 部署步骤
+
+**Step 1: 准备共享数据库**
+
+- 确保你的 MySQL 本身是高可用的（如主从复制、MGR）
+- 初始化 `seata` 库（`global_table`, `branch_table`, `lock_table`）
+
+
+
+**Step 2: 修改 TC 配置 (registry.conf)**
+
+- 所有 TC 节点的配置必须一致
+- `store.mode = "db"`
+- `registry.type = "nacos"`
+
+
+
+**Step 3: 启动多个 TC 实例**
+
+- 假设你有三台机器（或 Docker 容器）：
+  - `192.168.1.101:8091`
+  - `192.168.1.102:8091`
+  - `192.168.1.103:8091`
+- 启动命令：确保它们都注册到同一个 Nacos Namespace 和 Group
+
+
+
+**Step 4: 客户端验证**
+
+- 在 Nacos 控制台 -> 服务列表
+- 你应该看到 `seata-server` 服务的 **实例数** 变成了 **3**
+- 微服务启动时，Seata Client 会自动轮询这三个 IP
+
+
+
+###### 3. 异地多活与集群分组
+
+如果你的业务跨机房（北京、上海），为了减少网络延迟，你需要使用 **TC 集群分组**
+
+- **北京机房**：部署 TC 集群 `beijing-cluster`
+- **上海机房**：部署 TC 集群 `shanghai-cluster`
+- **微服务配置**：
+  - 北京的微服务：`service.vgroupMapping.my_tx_group = beijing-cluster`
+  - 上海的微服务：`service.vgroupMapping.my_tx_group = shanghai-cluster`
+
+这样，流量就被物理隔离了，实现了 **就近访问**
+
+
+
+##### 11.2 性能调优：让 Seata 飞起来
+
+Seata AT 模式虽然高性能，但相比于本地事务，它依然增加了网络 RTT（往返时延）和数据库 IO。 以下是生产环境中必须关注的优化点
+
+###### 1. 序列化优化
+
+Seata 需要将 Undo Log（包含数据镜像）序列化后存入数据库
+
+- **默认配置**：`jackson`。优点是可读性好（JSON），缺点是体积大、CPU 消耗高
+- **优化方案**：生产环境建议切换为 **kryo** 或 **protobuf**
+  - **体积对比**：Kryo 只有 Jackson 的 1/10 左右
+  - **性能对比**：序列化速度快 5-10 倍
+
+
+
+**配置方法 (application.yml)**：
+
+```yaml
+seata:
+  client:
+    undo:
+      log-serialization: kryo # 推荐使用 kryo
+```
+
+*(注意：服务端和客户端都需要引入对应的 kryo 依赖 jar 包)*
+
+
+
+
+
+###### 2. Undo Log 表优化
+
+`undo_log` 表是 IO 的热点
+
+- **索引优化**：
+  - 确保 `branch_id` 和 `xid` 上有联合唯一索引 `ux_undo_log`。Seata 二阶段回滚或删除日志全靠它
+- **表分区 (Partitioning)**：
+  - 如果 TPS 极高，`undo_log` 表会瞬间膨胀。建议根据时间或 ID 对该表进行数据库表分区
+- **清理策略**：
+  - 正常情况下，Seata 会异步自动删除已提交的 Undo Log
+  - **异常兜底**：如果发现表数据持续堆积（百万级），说明有事务卡死或清理线程失效。需要监控该表的行数，必要时配置 `log_status=1` 的自动清理脚本
+
+
+
+###### 3. 全局锁重试策略
+
+在热点数据（如秒杀库存）场景下，获取全局锁是最大的瓶颈
+
+- **默认配置**：
+  - `retry-interval`: 10ms (重试间隔)
+  - `retry-times`: 30 (重试次数)
+- **优化思路**：
+  - 如果你的业务持有锁的时间较长（比如 SQL 慢），应该 **增大间隔**，减少无意义的频繁网络请求
+  - **建议**：`retry-interval` 调整为 20-50ms，`retry-times` 调整为 20
+
+```yaml
+seata:
+  client:
+    rm:
+      lock:
+        retry-interval: 20
+        retry-times: 20
+```
+
+
+
+###### 4. 网络压缩
+
+TC 和 RM 之间有大量的交互（尤其是 Undo Log 数据传输）。启用压缩可以显著降低带宽压力
+
+**配置方法**：
+
+```yaml
+seata:
+  transport:
+    compressor: gzip # 开启 GZIP 压缩
+```
+
+
+
+##### 11.3 常见错误排查与故障处理
+
+在使用 Seata 的过程中，报错信息通常比较隐晦。以下是 **Top 3** 高频故障及其解决方案
+
+###### 1. 榜首恶魔：`no available service 'null' found`
+
+- **现象**：微服务启动或调用时报错，提示找不到服务
+- **根本原因**：**事务分组映射（Mapping）配置错误**。客户端拿着“事务分组名”去配置中心查，结果查了个寂寞，或者查到了集群名但注册中心里没有对应的 TC 实例
+- **排查链路**（按顺序检查）：
+  1. **检查 Client 配置**：`application.yml` 里的 `seata.tx-service-group` 值是什么？（假设是 `my_group`）
+  2. **检查 Nacos 配置**：去 Nacos 配置列表里搜，有没有一个 Key 叫 `service.vgroupMapping.my_group`？
+  3. **检查映射值**：这个 Key 的值（假设是 `default`），是不是 Seata Server 启动时注册的集群名？
+  4. **检查 TC 实例**：去 Nacos 服务列表，看 `seata-server` 服务下的实例，其 `cluster` 元数据是不是 `default`？
+
+
+
+###### 2. 性能杀手：`GlobalLockWaitTimeoutException`
+
+- **现象**：系统吞吐量骤降，日志疯狂刷屏 `Could not get global lock within 5000ms`
+- **根本原因**：**热点数据竞争**。多个全局事务（或加了 `@GlobalLock` 的本地事务）都在抢同一行记录的全局锁
+- **解决方案**：
+  1. **治标**：调大 `retry-times`（重试次数）和 `retry-interval`（重试间隔），给等待多一点时间
+  2. **治本**：优化业务 SQL
+     - 检查 SQL 是否没有走索引？导致锁住了整个表（Gap Lock）？
+     - 检查事务内是否包含了 HTTP 请求等耗时操作？（锁持有时间 = SQL 执行时间 + 其它业务耗时）。**务必把耗时操作移出事务外！**
+
+
+
+###### 3. 诡异回滚：`UndoLogDeleteException` 或 回滚失败
+
+- **现象**：二阶段回滚时报错，提示无法删除 Undo Log，或者反向补偿失败
+- **根本原因**：**脏数据**。
+  - 有人（DBA 或其他未接入 Seata 的服务）绕过 Seata 直接修改了数据库，导致 `After Image` 和当前数据库值对不上
+- **解决方案**：
+  - **人工介入**：Seata 为了保护数据，一旦发现数据不一致，会停止回滚并报警。你需要去数据库对比数据，手动修复，然后删除该条异常的 Undo Log。
+  - **规范**：确保所有涉及该表的写操作，都必须通过 Seata 体系（加 `@GlobalTransactional` 或 `@GlobalLock`）
 
 
 

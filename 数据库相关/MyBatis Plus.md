@@ -1174,37 +1174,72 @@ wrapper.isNull(User::getEmail);
 
 
 
-#### e. 逻辑连接
+#### e. 逻辑连接与嵌套 (优先级控制)
 
-- 默认情况下,所有条件都由 `AND` 连接
+- 默认情况下，所有条件 (`eq`, `gt` 等) 之间都是使用 `AND` 连接的
+- 当涉及到 `OR` 或者复杂的 `(A AND B) OR C` 逻辑时，必须使用以下方法来控制优先级（即显式的 **加括号**）
 
-##### `or()`
+##### `or()` (普通或)
 
-- 用于在两个条件之间插入 `OR`
+- **作用**：将 **下一个** 拼接的条件用 `OR` 连接，而不是默认的 `AND`
 
-  > 因为本质上我感觉不过是拼装sql，这个`or()`方法也只对两侧生效
+  > 它不会自动加括号，只是单纯把 SQL 连接符换成 OR。要注意逻辑优先级问题
 
   ```java
   // SQL: SELECT * FROM user WHERE age < 18 OR email IS NULL
-  wrapper.lt(User::getAge, 18).or().isNull(User::getEmail);
+  wrapper.lt(User::getAge, 18)
+         .or()
+         .isNull(User::getEmail);
   ```
 
+
+
+##### `and(Consumer)` (嵌套 AND / 加括号) ⭐
+
+- `and(Consumer<Param> consumer)`
+
+- **作用**：对应 SQL 中的 `AND (...)`。它会生成一对括号，将 Lambda 表达式内部定义的条件包裹起来
+
+  > 这就是用来解决 "怎么加括号" 的核心方法。如果你不写这个，直接链式调用，SQL 可能会变成平铺的，导致逻辑错误
+
+  ```java
+  // 需求: 名字是 "张三" 且 (年龄大于 18 或 邮箱为空)
+  // 错误写法: wrapper.eq(name, "张三").gt(age, 18).or().isNull(email) -> 会变成 name='张三' AND age>18 OR email is null
   
+  // 正确写法 (使用 and 包裹):
+  // SQL: SELECT * FROM user WHERE name = '张三' AND (age > 18 OR email IS NULL)
+  wrapper.eq(User::getName, "张三")
+         .and(i -> i.gt(User::getAge, 18).or().isNull(User::getEmail));
+  ```
+
+
+
+##### `or(Consumer)` (嵌套 OR)
+
+- `or(Consumer<Param> consumer)`
+
+- **作用**：对应 SQL 中的 `OR (...)`
+
+- **场景**：当你需要 `A OR (B AND C)` 这种逻辑时使用
+
+  ```java
+  // 需求: (状态为1) 或者 (名字包含"admin" 且 部门是"IT")
+  // SQL: SELECT * FROM user WHERE status = 1 OR (name LIKE '%admin%' AND dept = 'IT')
+  wrapper.eq(User::getStatus, 1)
+         .or(i -> i.like(User::getName, "admin").eq(User::getDept, "IT"));
+  ```
+
+
 
 ##### `nested()` (嵌套查询)
 
-- `nested(Consumer<LambdaQueryWrapper<T>> consumer)`
+- `nested(Consumer<Param> consumer)`
 
-- `nested()` 方法接受一个 Lambda 表达式作为参数，它会在 SQL 中生成一对括号 `()`，并将 Lambda 表达式中定义的所有条件包裹在其中
+- **说明**：功能与 `and(Consumer)` 基本一致，都是为了加括号
 
-```java
-// 需求: 查询 (年龄大于25 并且 名字中包含"张") 或者 (邮箱不为空) 的用户
-// SQL: SELECT * FROM user WHERE (age > 25 AND name LIKE '%张%') OR email IS NOT NULL
-
-wrapper.nested(w -> w.gt(User::getAge, 25).like(User::getName, "张"))
-       .or()
-       .isNotNull(User::getEmail);
-```
+  > 现在的版本中，更推荐直接根据逻辑是用 AND 连接还是 OR 连接，分别选择 `and(i -> ...)` 或 `or(i -> ...)`，语义更清晰
+  >
+  > `nested` 可以作为一种通用的“加括号”手段保留在知识库里
 
 
 
@@ -1247,6 +1282,15 @@ wrapper.nested(w -> w.gt(User::getAge, 25).like(User::getName, "张"))
   // 需求：只查询一条记录 (在某些数据库中比 selectOne 性能更好)
   // SQL: SELECT * FROM user LIMIT 1
   wrapper.last("LIMIT 1");
+  ```
+
+- 有些时候我们不需要查出数据，只需要判断 **是否存在**。 虽然 MP 没有直接的 `exist()` 方法，但配合 `select` 和 `last` 是一套经典组合拳
+
+  ```java
+  // SQL: SELECT 1 FROM user WHERE name = '张三' LIMIT 1
+  wrapper.select(User::getId) // 或者 select("1")
+         .eq(User::getName, "张三")
+         .last("LIMIT 1");
   ```
 
 
@@ -1305,11 +1349,14 @@ wrapper.nested(w -> w.gt(User::getAge, 25).like(User::getName, "张"))
 
   - `select(Predicate<TableFieldInfo> predicate)`: 一个更高级的用法，可以通过 Lambda 表达式动态地过滤字段。例如，可以用来排除某些特定字段
 
+  
+
 - **核心特性与最佳实践：**
 
   - **性能提升**: 避免查询不需要的大字段（如 `TEXT`, `BLOB`）或冗余字段，可以显著减少网络 I/O 和内存占用
-
   - **重要陷阱**: 如果你使用 `select()` 指定了部分字段，而查询出的实体对象后续需要用于 `updateById` 等更新操作，**请务必确保 `select()` 中包含了主键字段**！否则更新操作将因为找不到主键而失败
+
+  
 
 - **示例：指定查询字段**
 

@@ -446,7 +446,7 @@ String value = emptyOpt.get();
 
 
 
-#### B. 提供默认值：orElse(T other)
+#### B. 提供默认值：`orElse(T other)`
 
 当 Optional 为空时，返回一个备用的默认值
 
@@ -457,7 +457,7 @@ String result = opt.orElse("默认用户"); // 返回 "默认用户"
 
 
 
-**🚨 性能陷阱（重点）：** 无论 Optional 中是否有值，**`orElse` 中的参数都会被执行/计算**
+**🚨 性能陷阱（重点）：** 无论 `Optional` 中是否有值，**`orElse` 中的参数都会被执行/计算**
 
 ```JAVA
 Optional<String> opt = Optional.of("Hello");
@@ -469,7 +469,7 @@ String result = opt.orElse(createDefaultValue());
 
 
 
-#### C. 懒加载默认值：orElseGet(Supplier other)⭐
+#### C. 懒加载默认值：`orElseGet(Supplier)`⭐
 
 这是大多数时候应该使用的“默认值”方法。 它接受一个 `Supplier`（提供者）函数接口，**只有在 Optional 为空时，才会执行这个函数**
 
@@ -492,7 +492,7 @@ String result = opt.orElseGet(() -> queryFromDatabase());
 
 
 
-#### D. 异常处理：orElseThrow()
+#### D. 异常处理：`orElseThrow()`
 
 如果业务逻辑要求“值必须存在”，否则就是异常情况，请使用此方法
 
@@ -522,12 +522,14 @@ User user = findUserById(id)
 
 当我们只想 **消费** Optional 中的值（例如打印日志、发送消息、更新状态），而不需要返回值时，这一组方法是你的首选
 
-#### A. 如果存在就执行：ifPresent(Consumer action)
+#### A. 如果存在就执行：`ifPresent(Consumer)`
 
 这是替代 `if (opt.isPresent()) { ... }` 的标准方式
 
 - **逻辑**：如果 Optional 中有值，就执行传入的 Lambda 表达式；如果是空的，什么都不做
 - **参数**：`Consumer<T>`（消费型接口，有入参无返回值）
+
+
 
 **代码对比：**
 
@@ -548,11 +550,13 @@ userOpt.ifPresent(user -> sendEmail(user));
 userOpt.ifPresent(this::sendEmail);
 ```
 
+
+
 **实战场景**： 最常用于触发副作用，比如写库、发消息、记日志
 
 
 
-#### B. 存在与否都处理：ifPresentOrElse(Consumer, Runnable) (Java 9+)
+#### B. 存在与否都处理：`ifPresentOrElse(Consumer, Runnable)` (Java 9+)
 
 在 Java 8 中，`ifPresent` 有一个痛点：
 
@@ -608,13 +612,13 @@ userOpt.ifPresentOrElse(
 
 Optional 真正的威力不在于简单的判空，而在于它可以像流水线一样，对内部的值进行连续的转换和处理
 
-#### A. 基础转换：map()
+#### A. 基础转换：`map()`
 
-如果熟悉 Java Stream API，那么 Optional 的 `map` 理解起来非常容易
+如果熟悉 Java Stream API，那么 `Optional` 的 `map` 理解起来非常容易
 
 - **逻辑**：
-  - 如果 Optional 中有值，就对这个值应用提供的函数（Function），并将结果 **自动包装** 在一个新的 Optional 中
-  - 如果原 Optional 为空，则直接返回空 Optional
+  - 如果 `Optional` 中有值，就对这个值应用提供的函数（Function），并将结果 **自动包装** 在一个新的 `Optional` 中
+  - 如果原 `Optional` 为空，则直接返回空 `Optional`
 
 **代码示例：**
 
@@ -644,7 +648,7 @@ Optional<String> emailOpt = userOpt.map(User::getEmail);
 
 
 
-#### B. 扁平化转换：flatMap()
+#### B. 扁平化转换：`flatMap()`
 
 这是很多人的噩梦，但逻辑其实很简单
 
@@ -682,7 +686,7 @@ Optional<Optional<Address>> result = userOpt.map(User::getAddress);
 
 
 
-**✅ 解决方案：flatMap**
+**✅ 解决方案：`flatMap`**
 
 `flatMap`（Flat Map，扁平化映射）的作用是：**如果你的转换函数本身就已经返回了 Optional，我就不再多包一层了，直接把那个 Optional 拿来用**
 
@@ -733,7 +737,7 @@ public String getUserCityName(Long userId) {
 
 
 
-### 4.5 过滤操作：filter()
+### 4.5 过滤操作：`filter()`
 
 如果你习惯了使用 `if` 语句来检查某个值是否符合条件，`filter` 方法将彻底改变你的编码方式
 
@@ -791,7 +795,7 @@ public Optional<Order> findValidHighValueOrder(Long orderId) {
 
 随着 Java 版本的迭代，Optional 也在不断进化。以下两个方法是 Java 9 引入的重要补充，如果你在使用 JDK 8 之后的版本，一定要学会使用
 
-#### A. 备选方案链：or()
+#### A. 备选方案链：`or()`
 
 我们在 4.2 节学过 `orElse` 和 `orElseGet`，它们用于在 Optional 为空时返回一个**确定的值（T）**
 
@@ -828,7 +832,7 @@ public Optional<User> findUser(Long id) {
 
 
 
-#### B. 流式对接：stream() ⭐
+#### B. 流式对接：`stream()` ⭐
 
 这个方法将 Optional 与 Stream API 彻底打通了
 
@@ -927,7 +931,7 @@ users.stream()
 
 
 
-### 5.2 Optional 转换为 Stream (Java 9+)
+### 5.2 `Optional` 转换为 Stream (Java 9+)
 
 #### 知识点
 

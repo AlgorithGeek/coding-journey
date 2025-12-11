@@ -20,7 +20,7 @@ Java 库中早已存在许多符合此定义的接口（例如 `java.lang.Runnab
 - 误解：Lambda 表达式就是一个匿名内部类
 - 解答：Lambda 表达式是提供函数式接口抽象方法实现的一种更简洁、更高性能的机制，它在底层是使用 `invokedynamic` 实现的，而不是匿名内部类，并且性能远超匿名内部类
 
-> 我目前给它的理解是，它在特定条件下，可以用来替代一些匿名内部类
+> 我目前给它的理解是，它在特定条件下，可以用来替代匿名内部类
 
 
 
@@ -532,7 +532,7 @@ System.out.println(isLengthEqual.test("Hi", 5));    // false
 
 ### 4.2 “Operator”系列接口（同类型操作）
 
-Operator 接口是一种特殊的 `Function`，它们要求**所有参数类型和返回类型必须相同**
+Operator 接口是一种特殊的 `Function`，它们要求 **所有参数类型和返回类型必须相同**
 
 #### 4.2.1 `UnaryOperator<T>`
 
