@@ -528,17 +528,16 @@ List<String> names = users.stream()
 
 ### 3.3 flatMap (扁平化映射)
 
-`flatMap` 是 `map` 的一个特例，也是最难理解的操作之一。它用于处理“流中流”的结构
+最难理解的操作之一。它用于处理“流中流”的结构
 
 - **定义**：`<R> Stream<R> flatMap(Function<? super T, ? extends Stream<? extends R>> mapper)`
-- **作用**：将 Stream 中的每个元素 `T` 转换为一个 **新的 `Stream<R>`**，然后将所有这些新生成的 Stream **合并** 成一个 **单一的 `Stream<R>`**
+- **作用**：
+  - 将 Stream 中的每个元素 T 转换为一个 **新的 `Stream<R>`**，然后按照原有的顺序，将这些新生成的 Stream **首尾相接**（拼接）成一个 **单一的 `Stream<R>`**
+
 - **参数**：一个 `Function<T, Stream<R>>` 函数式接口，它接受一个元素 `T`，必须返回一个 `Stream<R>`
 - **逻辑**：
   1. `map` 阶段：对每个元素 `T` 应用 `mapper` 函数，得到一个 `Stream<Stream<R>>`（一个包含多个 Stream 的 Stream）
-  2. `flat` 阶段：将这个 `Stream<Stream<R>>` “拍平”或“解开”，将其所有内部 Stream 的元素合并成一个 `Stream<R>`
-- **与 map 的对比**：
-  - `map`：执行 **一对一** 转换 (`T` -> `R`)
-  - `flatMap`：执行 **一对多** 转换 (`T` -> `Stream<R>`)
+  2. `flat` 阶段：将这个 `Stream<Stream<R>>` **依次展开**，将其所有内部 Stream 的元素合并成一个 `Stream<R>`
 
 ```java
 // 示例 1: 扁平化嵌套列表
@@ -1458,6 +1457,7 @@ String result3 = list.stream()
 - `Collectors.toMap(keyMapper, valueMapper, mergeFunction, mapSupplier)`
   - **作用**: **终极版本**。默认 `toMap` 生成的是 `HashMap`（无序），如果你需要结果是有序的（如 `TreeMap` 或 `LinkedHashMap`），必须使用此版本
   - **`mapSupplier`**: 一个返回空 Map 的构造函数引用，例如 `TreeMap::new`
+  - 注意：`toMap` 的第三个参数 mergeFunction **千万不能传 null**，即使你确定没有冲突
 
 ```java
 List<User> users = Arrays.asList(
@@ -1501,7 +1501,7 @@ LinkedHashMap<String, Integer> orderedMap = users.stream()
 
 
 
-#### a. 一级分组 (基本用法)
+#### a. 基础分组(1个参数)
 
 `Collectors.groupingBy(classifier)`
 
@@ -1529,13 +1529,13 @@ Map<String, List<User>> byDept = users.stream()
 
 
 
-#### b. 分组 + 下游收集
+#### b. 分组与下游收集器(2个参数)
 
-##### 方法概念
+##### S. 2参方法概念
 
 `Collectors.groupingBy(Function<T, K> classifier, Collector<T, A, D> downstream)`:
 
-* **作用**: 按 `classifier` 分组，并对每个组中的元素应用 **下游收集器** （`downstream`），下游收集器默认情况为 Collectors.toList()
+* **作用**: 按 `classifier` 分组，并对每个组中的元素应用 **下游收集器** （`downstream`），**下游收集器默认情况为 Collectors.toList()**
 
   > 可以把“下游收集器”理解为：**“数据分到桶里后，要在桶里做什么？”**
   >
@@ -1544,6 +1544,163 @@ Map<String, List<User>> byDept = users.stream()
   > > **下游收集器 (Downstream Collector)** 允许我们在把数据放入桶之前，对桶里的数据进行二次处理（如统计、求和、转换）
 
 * **返回**: `Map<K, D>` (D 是下游收集器的结果类型)
+
+
+
+##### A. 聚合与统计
+
+不保留具体元素，直接计算每组的统计结果
+
+- **API**:
+  - `Collectors.counting()`: 统计数量
+  - `Collectors.summingInt/Long/Double(...)`: 求和
+  - `Collectors.maxBy/minBy(...)`: 求最值
+
+```JAVA
+// 1. 统计每个部门的人数 (返回 Long)
+Map<String, Long> countMap = users.stream()
+    .collect(Collectors.groupingBy(User::getDepartment, Collectors.counting()));
+
+// 2. 统计每个部门的工资总和 (返回 Integer)
+Map<String, Integer> salaryMap = users.stream()
+    .collect(Collectors.groupingBy(User::getDepartment, Collectors.summingInt(User::getSalary)));
+
+// 3. 找出每个部门工资最高的员工 (返回 Optional<User>)
+Map<String, Optional<User>> maxSalaryMap = users.stream()
+    .collect(Collectors.groupingBy(
+        User::getDepartment, 
+        Collectors.maxBy(Comparator.comparingInt(User::getSalary))
+    ));
+```
+
+
+
+##### B. 转换(`mapping`)
+
+mapping 是 Stream.map 的 **收集器版本**
+
+- **API**: `Collectors.mapping(Function mapper, Collector downstream)`
+
+- **作用**: 将进入收集器的每个元素 `T` 转换为另一种类型 `U`，然后将转换后的元素传递给 **下游收集器** 处理
+
+- **参数**：
+
+  - **Mapper**：Function<T, U>，转换函数（负责 T -> U）
+  - **Downstream**：Collector，下游收集器（负责收集 U）
+
+- **逻辑**：
+
+  - **Map 阶段**：对当前组内的每个元素应用 mapper 函数（执行 **一对一** 转换）
+  - **Collect 阶段**：将转换后的结果交给 downstream 进行收集
+
+- **场景**: 按部门分组，但我只想要“员工姓名”的列表，而不是整个 User 对象的列表
+
+  ```java
+  // 需求：获取每个部门的员工姓名列表
+  Map<String, List<String>> namesByDept = users.stream()
+      .collect(Collectors.groupingBy(
+          User::getDepartment,
+          // 下游：先提取名字(String)，再收集成 List
+          Collectors.mapping(User::getName, Collectors.toList())
+      ));
+  // 结果: { "HR": ["Alice"], "IT": ["Bob", "Charlie"] }
+  ```
+
+
+
+##### C. 过滤(`filtering`)
+
+filtering 是 Stream.filter 的 **收集器版本**。它专门解决“先过滤导致分组 Key 丢失”的痛点
+
+- **API**: `Collectors.filtering(Predicate predicate, Collector downstream)`
+
+- **作用**: 类在元素进入 **下游收集器** 之前进行判断，只有满足条件的元素才会被收集，**不满足的直接丢弃**（但不会影响外层的分组 Key）
+
+- **参数**：
+
+  - **`Predicate`**：判断条件（返回 true 保留，false 丢弃）
+  - **`Downstream`**：下游收集器（用于接收被保留的元素）
+
+- **逻辑**：
+
+  1. **Filter 阶段**：对当前组内的每个元素应用 predicate 判断
+  2. **Collect 阶段**：如果判断为 true，交给 downstream 收集；如果为 false，则忽略
+     - **关键点**：如果某组所有元素都被过滤掉了，下游收集器仍然会执行（收集到一个空容器，如空 List），从而保证该组的 **Key 依然存在**
+
+  
+
+- **痛点解决**:
+
+  - `stream().filter().collect(groupingBy)`: 如果某组所有元素被过滤，该组的 Key 会直接消失
+  - `collect(groupingBy(..., filtering))`: 即使某组元素全被过滤，Key 依然保留，Value 为空集合
+
+  
+
+- **示例**
+
+  ```java
+  // 需求：统计每个部门“薪水>8000”的员工
+  // 假设 HR 部门所有员工薪水都 < 8000
+  
+  // 方式 1: 使用 filtering (推荐) -> 能看到 HR 部门，列表为空
+  Map<String, List<User>> result = users.stream()
+      .collect(Collectors.groupingBy(
+          User::getDepartment,
+          Collectors.filtering(u -> u.getSalary() > 8000, Collectors.toList())
+      ));
+  // 结果: { "IT": [Bob...], "HR": [] }
+  
+  // 方式 2: 先 filter 后 group -> HR 部门直接消失
+  // Map<String, List<User>> result2 = users.stream()
+  //     .filter(u -> u.getSalary() > 8000)
+  //     .collect(Collectors.groupingBy(User::getDepartment));
+  // 结果: { "IT": [Bob...] }  <-- 丢失了 HR 信息
+  ```
+
+  
+
+
+
+##### D. 扁平化 (`flatMapping`)
+
+处理嵌套集合（一对多关系）
+
+- **API**: `Collectors.flatMapping(Function<T, Stream<U>> mapper, Collector downstream)`
+
+- **作用**:将分组内的每个元素 T 转换为一个 **`Stream<U>`**，然后将这些流中的元素 **依次展开（铺平）** 后传递给下游收集器
+
+- **参数**:
+
+  1. **Mapper**: 一个函数，接受元素 T，**必须返回一个 `Stream<U>`**
+  2. **Downstream**: 下游收集器，用于接收展开后的 U 元素
+
+- **逻辑**:
+
+  1. **Map 阶段**: 对组内的每个元素 T 应用 mapper，得到一堆 `Stream<U>`
+  2. **Flat 阶段**: 按照元素原本的顺序，将 Stream 里的内容 **“剥离”** 出来，逐个放入下游容器中（**不会打乱顺序**）
+
+- **场景**: 统计每个部门涉及的所有“标签”
+
+  ```JAVA
+  // 数据结构：User 类中包含 List<String> tags
+  // Alice (HR) -> ["Recruiting", "Admin"]
+  // Bob (IT)   -> ["Coding"]
+  // Charlie (IT)-> ["Coding", "Design"]
+  
+  // 需求：按部门分组，统计该部门下的所有标签 (Set自动去重)
+  Map<String, Set<String>> tagsByDept = users.stream()
+      .collect(Collectors.groupingBy(
+          User::getDepartment,
+          // 关键点：这里 mapper 返回的是 Stream，而不是 List
+          Collectors.flatMapping(u -> u.getTags().stream(), Collectors.toSet())
+      ));
+  
+  // 结果: 
+  // HR -> ["Recruiting", "Admin"]
+  // IT -> ["Coding", "Design"]  (注意："Coding" 被去重了，且没有嵌套 List)
+  ```
+
+  
 
 
 
@@ -1612,37 +1769,40 @@ Map<String, Optional<User>> topEarnerByDept = users.stream()
 
 
 
-#### c. 指定 Map 类型 + 下游收集 (全参数)
+#### c. 指定收集的 Map 与下游收集器(全参数)
 
 * `Collectors.groupingBy(Function<T, K> classifier, Supplier<M> mapFactory, Collector<T, A, D> downstream)`:
     * **作用**: 允许同时指定 `Map` 和下游收集器
 
       > 默认的 `groupingBy` 生成的是 `HashMap`，其 Key 是无序的
       >
-      > * 如果你希望分组后的结果**按 Key 排序**（例如按部门名称字母排序，或按日期排序），需要手动指定 Map 的构造工厂
+      > * 如果你希望分组后的结果 **按 Key 排序**（例如按部门名称字母排序，或按日期排序），需要手动指定 Map 的构造工厂
       >
 
     * **mapFactory**: 通常我们会选择 `TreeMap::new` (自然排序) 或 `LinkedHashMap::new` (保持插入顺序)
+    
+* **示例**
 
+    ```java
+    List<User> users = Arrays.asList(
+        new User("Alice", "HR"),
+        new User("Bob", "IT"),
+        new User("Charlie", "Finance")
+    );
+    
+    // 【场景】：按部门分组统计人数，且 Map 的 Key (部门名) 必须按字母顺序排列
+    // 期望顺序: Finance -> HR -> IT
+    TreeMap<String, Long> sortedStats = users.stream()
+        .collect(Collectors.groupingBy(
+            User::getDepartment,    // 1. 分类器
+            TreeMap::new,           // 2. Map工厂：指定使用 TreeMap 来存放结果
+            Collectors.counting()   // 3. 下游：统计数量 (注意：这里必须提供下游，哪怕只是简单的 toList)
+        ));
+    
+    // 结果 (顺序固定): { "Finance": 1, "HR": 1, "IT": 1 }
+    ```
 
-```java
-List<User> users = Arrays.asList(
-    new User("Alice", "HR"),
-    new User("Bob", "IT"),
-    new User("Charlie", "Finance")
-);
-
-// 【场景】：按部门分组统计人数，且 Map 的 Key (部门名) 必须按字母顺序排列
-// 期望顺序: Finance -> HR -> IT
-TreeMap<String, Long> sortedStats = users.stream()
-    .collect(Collectors.groupingBy(
-        User::getDepartment,    // 1. 分类器
-        TreeMap::new,           // 2. Map工厂：指定使用 TreeMap 来存放结果
-        Collectors.counting()   // 3. 下游：统计数量 (注意：这里必须提供下游，哪怕只是简单的 toList)
-    ));
-
-// 结果 (顺序固定): { "Finance": 1, "HR": 1, "IT": 1 }
-```
+    
 
 
 
@@ -1806,7 +1966,7 @@ Map<Boolean, Map<String, List<Student>>> complexMap = students.stream()
 
 这些收集器专门用于数学计算和统计，通常用于对流（或分组后的子流）进行聚合计算
 
-#### 计数 (counting)
+#### a. 计数 (counting)
 
 `Collectors.counting()`
 
@@ -1829,13 +1989,13 @@ Map<String, Long> countByItem = items.stream()
 
 
 
-#### 2. 求和 (summing)
+#### b. 求和 (summing)
 
 `Collectors.summingInt(ToIntFunction)` / `summingLong` / `summingDouble`
 
-- **作用**: 对流中元素的某个字段进行累加。
-- **参数**: 需要提供一个映射函数（Mapper），将对象转换为数字。
-- **返回**: `Integer` / `Long` / `Double` (注意不是 Optional，空流和为 0)。
+- **作用**: 对流中元素的某个字段进行累加
+- **参数**: 需要提供一个映射函数（Mapper），将对象转换为数字
+- **返回**: `Integer` / `Long` / `Double` (注意不是 Optional，空流和为 0)
 
 ```java
 List<Order> orders = Arrays.asList(
@@ -1855,7 +2015,7 @@ Map<String, Integer> totalAmountByDept = orders.stream()
 
 
 
-#### 3. 平均值 (averaging)
+#### c. 平均值 (averaging)
 
 `Collectors.averagingInt(ToIntFunction)` / `averagingLong` / `averagingDouble`
 
@@ -1874,7 +2034,7 @@ Map<String, Double> avgAmountByDept = orders.stream()
 
 
 
-#### 4. 最值 (max/min)
+#### d. 最值 (max/min)
 
 `Collectors.maxBy(Comparator)` / `Collectors.minBy`
 
@@ -1900,7 +2060,7 @@ Map<String, Optional<Order>> maxOrderByDept = orders.stream()
 
 
 
-#### 5. 一次性全套统计 (summarizing)
+#### e. 一次性全套统计 (summarizing)
 
 `Collectors.summarizingInt(ToIntFunction)` / `summarizingLong` / `summarizingDouble`
 
@@ -2049,7 +2209,7 @@ Map<String, Optional<User>> topEarner = users.stream()
 
 #### A: 不可变集合
 
-虽然 `toList()` 很方便，但它返回的 `ArrayList` 是可变的。如果你想返回一个**只读**的集合，必须用 `collectingAndThen` 包一层。
+虽然 `toList()` 很方便，但它返回的 `ArrayList` 是可变的。如果你想返回一个 **只读** 的集合，必须用 `collectingAndThen` 包一层。
 
 ```JAVA
 List<Integer> list = Arrays.asList(1, 2, 3);
