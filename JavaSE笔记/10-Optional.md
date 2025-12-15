@@ -556,7 +556,7 @@ userOpt.ifPresent(this::sendEmail);
 
 
 
-#### B. 存在与否都处理：`ifPresentOrElse(Consumer, Runnable)` (Java 9+)
+#### B. 存在与否都处理：`ifPresentOrElse(Consumer, Runnable)`
 
 在 Java 8 中，`ifPresent` 有一个痛点：
 
