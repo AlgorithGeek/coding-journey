@@ -2979,6 +2979,12 @@ public class TopicListener {
 ```yaml
 spring:
   rabbitmq:
+    # 1. 基础连接超时 (配合重试机制使用)
+    # 建议设置短一点 (如 1s)，实现"快速失败"，以便立刻触发重试逻辑
+    # 如果不配，默认是无限等待或操作系统超时，导致线程卡死更久
+    connection-timeout: 1000ms
+
+    # 2. 发送重试配置
     template:
       retry:
         enabled: true            # 【关键】开启发送失败重试
@@ -3137,7 +3143,7 @@ public void sendOrder() {
 
 
 
-#### 3. 防线 2 : 存储端可靠性
+#### 3. 防线 2: 存储端可靠性
 
 **核心逻辑推演：**
 
@@ -3445,7 +3451,122 @@ public class ElegantListener {
 
 
 
+#### 补充知识: Lazy Queue (惰性队列)
 
+##### 1. 什么是 Lazy Queue？
+
+Lazy Queue 是 RabbitMQ 从 3.6.0 版本引入的一种队列模式
+
+- 它的核心特征是：**尽可能地将消息存储在磁盘上，只有在消费者真正需要消费时，才将消息加载到内存中**
+
+  - **默认队列 (Default/Standard)**：倾向于把消息保存在 **内存** 中以获得最快的速度。只有当内存紧张时，才会把消息换页（Page Out）到磁盘
+
+  - **惰性队列 (Lazy)**：默认就直接把消息写到 **磁盘**，内存里只保留很少量的元数据。
+
+
+
+##### 2. 为什么要用它？
+
+在普通队列模式下，如果消费者挂了（Consumer Down）或者生产速度远超消费速度，队列里会积压大量消息
+
+- RabbitMQ 会尝试把这些消息都塞进内存，结果就是：
+  1. **OOM (Out of Memory)**：内存爆满，RabbitMQ 进程被杀
+  2. **性能剧烈波动**：为了释放内存，RabbitMQ 会强制把内存消息刷到磁盘（Page Out），这个过程会阻塞队列处理，导致性能断崖式下跌
+
+**Lazy Queue 就是为了应对“海量消息堆积”的场景。** 它可以轻松支持数百万甚至数亿条消息的堆积，而不会占用过多的 RAM
+
+
+
+##### 3. 如何开启？
+
+通常通过 **Policy (策略)** 或 **队列参数** 来设置
+
+###### 方法 A: 声明队列时指定 (Arguments)
+
+**1. 原生 Java 客户端写法：**
+
+```java
+// Java 示例
+Map<String, Object> args = new HashMap<String, Object>();
+args.put("x-queue-mode", "lazy");
+channel.queueDeclare("my_lazy_queue", true, false, false, args);
+```
+
+
+
+**2. Spring AMQP 写法 (推荐)：**
+
+Spring AMQP 提供了更便捷的 `QueueBuilder`，专门封装了 `.lazy()` 方法。
+
+```java
+@Bean
+public Queue lazyQueue() {
+    return QueueBuilder
+        .durable("my_lazy_queue")
+        .lazy() // 这一步等同于 .withArgument("x-queue-mode", "lazy")
+        .build();
+}
+```
+
+
+
+**3. Spring 注解写法：**
+
+```java
+@RabbitListener(queuesToDeclare = @Queue(
+    name = "my_lazy_queue",
+    arguments = @Argument(name = "x-queue-mode", value = "lazy")
+))
+public void listen(String msg) {
+    // ...
+}
+```
+
+
+
+###### 方法 B: 使用 Policy (推荐，运维侧)
+
+不需要改代码，直接在 管理 UI 上添加队列时在 Arguments 那里点击 Lazy mode 就行
+
+
+
+##### 4. 优缺点对比
+
+| 特性           | 普通队列 (Default)    | 惰性队列 (Lazy)     |
+| -------------- | --------------------- | ------------------- |
+| **存储位置**   | 优先内存              | 优先磁盘            |
+| **I/O 开销**   | 低 (除非内存不够)     | 高 (每次都要写盘)   |
+| **吞吐量**     | 极高                  | 稍低 (受限于磁盘IO) |
+| **抗堆积能力** | 弱 (受内存限制)       | **强** (受磁盘限制) |
+| **恢复速度**   | 慢 (重启后需重建索引) | 快 (本来就在磁盘)   |
+
+
+
+##### 5. 版本演进 (重要知识点)
+
+RabbitMQ 对这个特性的处理一直在进化，这是一个容易混淆的点：
+
+- **RabbitMQ 3.6.0 之前**：没有 Lazy Queue，堆积消息简直是噩梦
+
+- **RabbitMQ 3.6.0 ~ 3.11**：引入了 `lazy` 模式，需要手动开启
+
+- **RabbitMQ 3.12+ (新版本)**：**这是大变革！** 
+
+  - RabbitMQ 3.12 对 Classic Queue (经典队列) 进行了重写 (CQv2)
+
+    **现在，所有的 Classic Queue 在行为上都默认变得非常像 Lazy Queue 了。** 它们默认就会积极地将消息存入磁盘
+
+  - 在 3.12+ 版本中，`x-queue-mode=lazy` 这个参数虽然还有效，但实际上普通队列的内存管理已经非常高效，二者的界限变得模糊了
+
+    官方现在的建议基本上是：**对于 3.12+，你可能不再需要显式设置 lazy 模式了，因为默认行为已经足够好**
+
+
+
+##### 6. 适用场景
+
+1. **削峰填谷**：秒杀场景，流量瞬间进来，消费者慢慢处理。
+2. **消费者不可靠**：经常需要维护、重启，或者处理逻辑很慢，导致队列长期有积压。
+3. **日志收集**：允许一定的延迟，但绝不允许因为内存爆了而丢数据。
 
 
 

@@ -356,6 +356,15 @@ Stream<String> constantStream = Stream.generate(() -> "hello");
 List<Double> randoms = randomStream.limit(5).collect(Collectors.toList());
 ```
 
+在生成随机数流这个特定场景下，其实有个更专业的 **Random 流**写法
+
+```java
+// 使用 Random 类直接生成无限流
+// 比 Stream.generate(Math::random) 性能更好，且可以直接指定范围
+new Random().ints().limit(5); // 生成 5 个随机 int
+new Random().ints(5, 0, 100); // 生成 5 个 0-100 之间的随机 int
+```
+
 
 
 ### 2.6 创建基本类型流
@@ -439,7 +448,60 @@ Stream<String> wordStream = java.util.regex.Pattern.compile("\\s+")
 
 
 
+### 2.8 合并流 (`concat`)
+
+当你有两个已经存在的流，或者需要将两个数据源拼接在一起处理时，可以使用静态方法 `concat`
+
+- **`Stream.concat(Stream a, Stream b)`**：创建一个延迟合并的流，其元素是第一个流的所有元素，后面跟着第二个流的所有元素
+- **注意**：如果是并行流，合并后的顺序可能会受到影响
+
+```java
+// 1. 对象流合并
+Stream<String> s1 = Stream.of("A", "B");
+Stream<String> s2 = Stream.of("C", "D");
+Stream<String> result = Stream.concat(s1, s2);
+// result.forEach(System.out::print); // 输出 ABCD
+
+// 2. 基本类型流合并 (解决 LeetCode 88 的关键)
+// IntStream, LongStream, DoubleStream 都有对应的静态 concat 方法
+int[] arr1 = {1, 3, 5};
+int[] arr2 = {2, 4, 6};
+
+IntStream merged = IntStream.concat(Arrays.stream(arr1), Arrays.stream(arr2));
+// merged.sorted().forEach(System.out::println); // 1, 2, 3, 4, 5, 6
+```
+
 ------
+
+### 2.9 从可能为 Null 的对象创建
+
+在后端业务开发中，我们经常遇到“如果对象不为 null 就转成流，否则给个空流”的场景。Java 9 引入了 `ofNullable` 来简化这种防御性代码
+
+- **`Stream.ofNullable(T t)`**：如果元素非空，返回包含该元素的单元素流；如果元素为 null，返回空流
+
+```java
+String userRole = null;
+
+// 以前的写法 (繁琐)
+Stream<String> s1 = (userRole != null) ? Stream.of(userRole) : Stream.empty();
+
+// 现在的写法 (优雅)
+Stream<String> s2 = Stream.ofNullable(userRole);
+
+// 实战场景：扁平化处理可能为 null 的列表
+List<String> list1 = Arrays.asList("A", "B");
+List<String> list2 = null; // 数据库没查到，返回了 null
+
+Stream<String> safeStream = Stream.of(list1, list2)
+    .flatMap(list -> Stream.ofNullable(list)) // 如果 list 是 null，这就变成空流，不会报错
+    .flatMap(List::stream);
+```
+
+
+
+------
+
+
 
 ## 3. 中间操作
 
