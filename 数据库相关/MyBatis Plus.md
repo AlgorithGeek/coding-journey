@@ -1382,7 +1382,7 @@ wrapper.isNull(User::getEmail);
 
 ## 4. `LambdaUpdateWrapper` 
 
-`LambdaUpdateWrapper` 是 MyBatis-Plus 提供的一个用于构建 `UPDATE` SQL 语句的类型安全包装器。
+`LambdaUpdateWrapper` 是 MyBatis-Plus 提供的一个用于构建 `UPDATE` SQL 语句的类型安全包装器
 
 相比于 `LambdaQueryWrapper` 主要关注筛选数据，`LambdaUpdateWrapper` 的核心职责是 **定义数据变更（SET 子句）和限定变更范围（WHERE 子句）**
 
@@ -1468,7 +1468,7 @@ wrapper.isNull(User::getEmail);
 
 - **`entity`**: 
 
-  - 这个参数用于填充 `SET` 子句中**未被 `updateWrapper` 指定**的字段值
+  - 这个参数用于填充 `SET` 子句中 **未被 `updateWrapper` 指定** 的字段值
 
     在大多数只使用 `updateWrapper` 来指定 `SET` 内容的场景下，**这个参数应传入 `null`**
 
@@ -1507,9 +1507,9 @@ wrapper.isNull(User::getEmail);
 
 
 
-##### 策略2：混合模式 (Entity + Wrapper)
+##### 策略2：混合模式
 
->我不太建议使用这种方式
+>就是双参数模式，entity+wrapper，我不太建议使用这种方式
 
 如果同时传入了 `entity` 和配置了 `set` 的 `wrapper`，MyBatis-Plus 会将两者的 `SET` 内容 **合并**
 
@@ -1537,7 +1537,9 @@ wrapper.isNull(User::getEmail);
   userMapper.update(data, wrapper);
   ```
 
-- **极度危险：Entity 中的 ID 陷阱** 如果你的 `data` 对象中不小心包含了 ID
+- **极度危险：Entity 中的 ID 陷阱** 
+
+  如果你的 `data` 对象中不小心包含了 ID
 
   ```java
   User data = new User();
@@ -1557,23 +1559,21 @@ wrapper.isNull(User::getEmail);
 
 
 
-##### ⚠️ 危险误区：`update(entity, null)`
+##### 危险误区：`update(entity, null)`
 
-很多新手会尝试将第二个参数传 `null`，期望它像 `updateById` 一样工作。
+很多新手会尝试将第二个参数传 `null`，期望它像 `updateById` 一样工作
 
-- **后果**：由于 `wrapper` 为空，生成的 SQL **没有 WHERE 子句**。
-- **行为**：**全表更新** (UPDATE table SET ...)。
-- **正确做法**：如果你只想根据主键更新实体，请直接使用 `updateById` 方法。
+- **后果**：由于 `wrapper` 为空，生成的 SQL **没有 WHERE 子句**
+- **行为**：**全表更新** (UPDATE table SET ...)
+- **正确做法**：如果你只想根据主键更新实体，请直接使用 `updateById` 方法
 
-```
+```java
 // 错误示范：会导致全表更新！(除非配置了 BlockAttackInnerInterceptor)
 userMapper.update(user, null);
 
 // 正确示范：根据 ID 更新
 userMapper.updateById(user);
 ```
-
-
 
 
 
@@ -1817,12 +1817,37 @@ userMapper.updateById(user);
 
 ### 3.3 改
 
+> BaseMapper 没有 批量更新的方法
+
 #### `updateById`
 
 - **`int updateById(T entity)`**
   - **作用**：根据主键 ID 更新记录
-  - **说明**：只会更新 `entity` 中**非 `null`** 的属性值。这是 MP 的默认更新策略，可以防止误更新
-  - **示例**：`userMapper.updateById(user);`
+  - **参数说明**：
+  
+    - **`entity`**：实体对象。**必须包含主键 ID**，否则无法确定更新哪一行
+  
+    
+  - **核心特性：动态 SQL **⭐
+  
+    - MP 默认采用 **“判空更新”** 策略：只有 `entity` 中 **非 `null`** 的属性，才会被生成到 SQL 的 `SET` 语句中
+    - **优势**：避免将数据库中已有的值错误地覆盖为 `null`
+    - **劣势**：如果业务真的需要把某个字段更新为 `null`，这个方法默认做不到（需要配合 `@TableField(updateStrategy = ...)` 或使用 Wrapper）
+  
+    
+  
+  - **代码与 SQL 对照示例**：
+  
+    ```java
+    User user = new User();
+    user.setId(1L);      // 必须设置 ID (WHERE 条件)
+    user.setAge(25);     // 要修改的值 (SET 内容)
+    // user.setName(null); // 为空的字段会被自动忽略
+    
+    userMapper.updateById(user);
+    ```
+  
+    > **生成的 SQL**： `UPDATE user SET age=25 WHERE id=1` *(注意：name 字段没有出现在 SQL 中，原数据保持不变)*
 
 
 
@@ -1830,19 +1855,66 @@ userMapper.updateById(user);
 
 - **`int update(T entity, Wrapper<T> updateWrapper)`**
 
-  - **作用**：根据 **`Wrapper`** 构建的条件，更新 **`entity`** 中指定的字段
+  - **作用**：通用的更新方法，既可以用于复杂的单条更新，也可以用于批量更新
 
-  - **示例**：将所有姓“王”的用户的年龄更新为 20 岁
+  - **参数详解**： 这是一个“组合拳”方法，两个参数共同决定了 SQL 的样子
 
+    - **`entity` (SET 数据源)**：
+      - 用于生成 SQL 的 `SET` 部分
+      - 同样遵循 **“非空更新”** 原则：只有非 null 的字段才会被 set
+      - **如果传 `null`**：表示 `SET` 部分完全由 `updateWrapper` 来决定（推荐做法）
+    - **`updateWrapper` (WHERE 条件源 + 额外 SET)**：
+      - 主要用于生成 SQL 的 `WHERE` 部分
+      - 也可以通过 `.set()` 方法补充或覆盖 `SET` 部分的内容
+    
+    
+    
+  
+  - **常见用法场景**：
+  
+    **场景 A：混合模式 (Entity + Wrapper)** *⚠️ **不推荐使用**，除非你非常清楚自己在做什么❗
+  
+    用 Entity 定死要改的值，用 Wrapper 圈定要改的人
+  
     ```java
-    User user = new User(); // 要更新的字段值
-    user.setAge(20);
+    User user = new User();
+    user.setAge(20); 
     
     LambdaUpdateWrapper<User> wrapper = new LambdaUpdateWrapper<>();
-    wrapper.like(User::getName, "王%"); // 更新条件
+    wrapper.like(User::getName, "王"); 
     
+    // SQL: UPDATE user SET age=20 WHERE name LIKE '王%'
     userMapper.update(user, wrapper);
     ```
+  
+    > **❌ 风险警告**：如果在 `user` 对象中不小心设置了 ID（例如 `user.setId(1)`），而 Wrapper 是针对其他人的条件，会导致 **ID 被修改**，引发严重数据事故。**建议尽量避免这种写法**
+  
+    
+  
+    **❓ 疑问：如果字段冲突了会怎样？** 如果 `entity.setAge(10)` 且 `wrapper.set(User::getAge, 20)`：
+  
+    1. **SQL 现象**：MP 会将两者生成的 SQL **直接拼接**，不会互相覆盖或报错。 生成的 SQL 类似：`UPDATE user SET age=10, age=20 WHERE ...`
+    2. **执行结果**：大多数数据库（如 MySQL）遵循“**后覆盖前**”原则。由于 Wrapper 的 SQL 片段通常追加在 Entity 之后，所以最终值通常是 **20**
+    3. **结论**：这是**严重不规范**的 SQL 写法，虽然能跑通，但逻辑极其混乱，**绝对禁止**！
+  
+    
+  
+    
+  
+    **场景 B：纯 Wrapper 更新 (Entity 传 null)** *✅ **最佳实践**，逻辑清晰且安全*
+  
+    ```java
+    LambdaUpdateWrapper<User> wrapper = new LambdaUpdateWrapper<>();
+    wrapper.set(User::getEmail, "test@baomidou.com") // 明确指定 SET
+           .eq(User::getName, "Jack");               // 明确指定 WHERE
+    
+    // entity 传 null，全靠 wrapper
+    userMapper.update(null, wrapper);
+    ```
+  
+  - **⚠️ 危险操作警示**： 如果 `updateWrapper` 传入 `null` 或一个空的 Wrapper，且没有配置防全表更新插件：
+  
+    > **后果**：生成不带 `WHERE` 的 SQL (`UPDATE user SET ...`)，导致**全表数据被修改**！
 
 
 
@@ -2213,64 +2285,107 @@ userMapper.updateById(user);
 
 - **`boolean updateById(T entity)`**
 
-- **功能**: 根据主键 ID 更新。
+- **功能**: 根据主键 ID 更新
 
 - **参数**:
 
-  - `entity`: 要更新的实体对象，ID 字段必须有值。
+  - **`entity`**：实体对象。**必须包含主键 ID**，否则无法确定更新哪一行
 
-- **说明**: 只会更新实体中**非 null** 的字段。
+- **核心特性：动态 SQL**
+
+  - MP 默认采用 **“判空更新”** 策略：只有 `entity` 中 **非 `null`** 的属性，才会被生成到 SQL 的 `SET` 语句中
+  - **优势**：避免将数据库中已有的值错误地覆盖为 `null`
+  - **劣势**：如果业务真的需要把某个字段更新为 `null`，这个方法默认做不到（需要配合 `@TableField(updateStrategy = ...)` 或使用 Wrapper）
+
+- **说明**: 只会更新实体中 **非 null** 的字段
 
 - **示例**:
 
   ```java
   User user = new User();
-  user.setId(1001L); // 指定要更新的记录ID
-  user.setEmail("new.email@example.com"); // 只更新email字段
-  boolean success = userService.updateById(user);
+  user.setId(1L);      // 必须设置 ID (WHERE 条件)
+  user.setAge(25);     // 要修改的值 (SET 内容)
+  // user.setName(null); // 为空的字段会被自动忽略
+  
+  userMapper.updateById(user);
   ```
 
-
-
-#### `update`
-
-- **`boolean update(Wrapper<T> updateWrapper)`**
-
-  > 好像有点问题，没有这个方法
-
-- **功能**: 根据 `Wrapper` 条件批量更新。
-
-- **参数**:
-
-  - `updateWrapper`: 更新条件构造器，可以同时包含 `SET` 更新内容和 `WHERE` 条件。
-
-- **示例**:
-
-  ```java
-  // 将所有'研发部'的员工年龄增加 1
-  UpdateWrapper<User> wrapper = new UpdateWrapper<>();
-  wrapper.eq("department", "研发部")
-         .setSql("age = age + 1");
-  boolean success = userService.update(wrapper);
-  ```
+  **生成的 SQL**： `UPDATE user SET age=25 WHERE id=1` *(注意：name 字段没有出现在 SQL 中，原数据保持不变)*
 
 
 
 #### `updateBatchById`
 
+这是 Service 层相比 Mapper 层的一大优势，Mapper 层默认没有直接的批量更新方法
+
 - `boolean updateBatchById(Collection<T> entityList)`
 
-- **功能**: 根据 ID 批量更新。
+- **功能**: 根据 ID 批量更新
 
 - **参数**:
 
-  - `entityList`: 包含 ID 的实体集合。
+  - `entityList`: 包含 ID 的实体集合
 
 - **示例**:
 
   ```java
   List<User> usersToUpdate = ...; // 获取需要更新的用户列表
   boolean success = userService.updateBatchById(usersToUpdate);
+  ```
+
+
+
+#### `update(Wrapper)`
+
+- **`default boolean update(Wrapper<T> updateWrapper)`**
+
+- **功能**: 根据 Wrapper 条件直接更新
+
+- **参数**:
+
+  - **`updateWrapper`**: 实体对象封装操作类，用于设置 `SET` 字段和 `WHERE` 条件
+
+- **说明**: 
+
+  - 这是一个快捷方法（等同于 `update(null, updateWrapper)`）
+
+    在 Service 层中，你可以 **直接传递 Wrapper**，而不需要像在 Mapper 层那样显式传入 null
+
+- **示例**:
+
+  ```java
+  userService.update(
+      new LambdaUpdateWrapper<User>()
+          .eq(User::getDepartment, "研发部")
+          .set(User::getStatus, "NORMAL")
+  );
+  ```
+
+
+
+#### `update(Entity, Wrapper)`
+
+- **`boolean update(T entity, Wrapper<T> updateWrapper)`**
+
+- **功能**: 根据 `entity` 和 `Wrapper` 共同构建 SQL 进行更新
+
+- **参数**:
+
+  - **`entity`**: 用于生成 `SET` 语句（仅更新非空字段）。如果传 `null`，则 `SET` 部分完全由 Wrapper 决定。
+  - **`updateWrapper`**: 用于生成 `WHERE` 条件（也可以通过 `.set()` 补充 `SET` 内容）
+
+- **核心警示：不建议使用“混合模式”** 
+
+  - 和 BaseMapper 一样，虽然这个方法支持同时传两个参数，但 **强烈不建议** 这样做（即 `entity` 存数据，`wrapper` 存条件）
+    - **风险**：如果 `entity` 中不小心包含了 ID，而 `wrapper` 指向了其他记录，会导致 **ID 被恶意修改** 或 **主键冲突**
+
+- **✅ 最佳实践**： 始终将第一个参数传 `null`，将所有的 `SET` 和 `WHERE` 逻辑都收敛在 `Wrapper` 中
+
+  ```java
+  // ✅ 推荐做法：entity 传 null
+  userService.update(null, new LambdaUpdateWrapper<User>()
+      .eq(User::getId, 1L)
+      .set(User::getAge, 30));
   ```
 
 
@@ -2936,7 +3051,7 @@ public class User {
 
 #### 配置步骤
 
-- 使用分页插件的第一步，也是最关键的一步，就是**将其作为拦截器配置到 Mybatis 的执行流程中**
+- 使用分页插件的第一步，也是最关键的一步，就是 **将其作为拦截器配置到 Mybatis 的执行流程中**
 
 - 在SpringBoot中，通常会创建一个 `MybatisPlusConfig` 配置类
 
