@@ -1189,7 +1189,7 @@ public class WebSocketNativeConfig implements WebSocketConfigurer {
 
 
 
-##### 8.1 配置类代码详解
+##### 1.1 配置类代码详解
 
 我们需要创建一个新的配置类，使用 `@EnableWebSocketMessageBroker` 注解
 
@@ -1248,7 +1248,7 @@ public class WebSocketStompConfig implements WebSocketMessageBrokerConfigurer {
 
 
 
-##### 8.2 消息走向
+##### 1.2 消息走向
 
 以上一节的配置为例
 
@@ -1269,7 +1269,7 @@ public class WebSocketStompConfig implements WebSocketMessageBrokerConfigurer {
 
 
 
-##### 8.3 🚫 常见误区与避坑
+##### 1.3 🚫 常见误区与避坑
 
 1. **端点 (Endpoint) vs 目的地 (Destination)**
 
@@ -1299,7 +1299,7 @@ public class WebSocketStompConfig implements WebSocketMessageBrokerConfigurer {
 
 
 
-##### 9.1 核心注解详解
+##### 2.1 核心注解详解
 
 我们需要掌握三个最关键的注解，它们决定了消息的“来”与“去”
 
@@ -1344,7 +1344,7 @@ public class WebSocketStompConfig implements WebSocketMessageBrokerConfigurer {
 
 
 
-##### 9.2 代码实战
+##### 2.2 代码实战
 
 ```java
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -1391,7 +1391,7 @@ public class ChatController {
 
 
 
-##### 9.3 🚫 常见误区与避坑
+##### 2.3 🚫 常见误区与避坑
 
 1. **前端发送路径错误**
 
@@ -1429,7 +1429,7 @@ public class ChatController {
 
 
 
-##### 10.1 核心工具：`SimpMessagingTemplate`
+##### 3.1 核心工具：`SimpMessagingTemplate`
 
 Spring 提供了一个极其强大的 Bean：**`SimpMessagingTemplate`**
 
@@ -1442,7 +1442,7 @@ Spring 提供了一个极其强大的 Bean：**`SimpMessagingTemplate`**
 
 
 
-##### 10.2 核心方法详解 (API)
+##### 3.2 核心方法详解 (API)
 
 这个类里有很多方法，但作为开发者，你只需要死记硬背以下 **两个核心方法**，就能应对 99% 的场景
 
@@ -1503,7 +1503,7 @@ template.convertAndSendToUser("1001", "/queue/notify", "您的订单已发货");
 
 
 
-##### 10.3 代码实战：构建一个通知服务
+##### 3.3 代码实战：构建一个通知服务
 
 我们通常会封装一个 Service 来专门负责发消息，这样业务代码就不需要关心 WebSocket 的细节
 
@@ -1555,7 +1555,7 @@ public class WebSocketNotificationService {
 
 
 
-##### 10.4 常见触发场景
+##### 3.4 常见触发场景
 
 有了上面的 Service，你就可以在任何业务逻辑中触发推送了：
 
@@ -1602,7 +1602,7 @@ public class PaymentCallbackController {
 
 
 
-##### 10.5 🚫 常见误区与避坑
+##### 3.5 🚫 常见误区与避坑
 
 1. **不要手动拼接 JSON**
 

@@ -2597,6 +2597,17 @@ public class FanoutListener {
 
 这是 RabbitMQ 的“瑞士军刀”。如果你在设计系统时拿不准用哪个交换机，**选 Topic 准没错**
 
+> 枚举: `ExchangeTypes.TOPIC`
+>
+> > 示例：
+> >
+> > ```java
+> > exchange = @Exchange(
+> >         name = MqConstants.Exchange.ORDER_EXCHANGE,
+> >         type = ExchangeTypes.TOPIC
+> > ),
+> > ```
+
 
 
 ##### 1. 概念解析：通配符路由

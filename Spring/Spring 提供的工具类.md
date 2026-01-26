@@ -1805,7 +1805,7 @@
 
 ## 基本概念
 
-- 位于 `org.springframework.util` 包下，主要用于**简化和安全地处理Java中的集合（Collections）和Map**
+- 位于 `org.springframework.util` 包下，主要用于 **简化和安全地处理Java中的集合（Collections）和Map**
 
 
 
