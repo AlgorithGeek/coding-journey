@@ -3369,7 +3369,7 @@ public class SessionManager {
 
 # Spring Cache
 
-> Spring Data Redis (SDR) **不是** Spring Cache的**发明者**，而是**“实现者”**
+> Spring Data Redis (SDR) **不是** Spring Cache 的**发明者**，而是**“实现者”**
 
 - 这是 **Spring Framework**（`spring-context` 模块）提供的最强大的功能之一，它定义了一套**缓存抽象 API 和规范**
   - 它允许开发者通过 **统一的注解**（如 `@Cacheable`, `@CachePut`），将缓存逻辑 **声明式** 地集成到业务代码中，而无需手动编写 `redisTemplate.get()` 或 `set()` 这样重复的“样板代码”

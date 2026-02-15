@@ -657,834 +657,15 @@ docker run -d \
 
 
 
-## 二：五大核心消息模型 (原生 API 视角)
+## 二：消息模型 与 Spring Boot
 
-### 2.0 环境准备与依赖引入
+### 0. 环境与核心组件
 
-在开始编写 Java 原生 API 代码之前，我们需要搭建一个纯净的 Java 开发环境
-
-**注意**：本阶段不使用 Spring Boot，而是直接使用 RabbitMQ 官方提供的 Java 客户端 (`amqp-client`)，目的是为了让你看清 RabbitMQ 底层的真实面貌
-
-#### 1. 核心依赖
-
-请创建一个新的 **Maven** 项目，并在配置文件中添加以下依赖
-
-###### Maven (`pom.xml`)
-
-```xml
-<dependencies>
-    <!-- RabbitMQ Java Client 官方驱动核心包 -->
-    <!-- 就像 JDBC 驱动之于 MySQL，这是连接 RabbitMQ 必不可少的桥梁 -->
-    <dependency>
-        <groupId>com.rabbitmq</groupId>
-        <artifactId>amqp-client</artifactId>
-        <version>5.20.0</version> <!-- 推荐使用 5.x 稳定版 -->
-    </dependency>
-
-    <!-- 可选：简单的日志依赖 (便于查看连接日志) -->
-    <dependency>
-        <groupId>org.slf4j</groupId>
-        <artifactId>slf4j-simple</artifactId>
-        <version>1.7.36</version>
-        <scope>test</scope>
-    </dependency>
-</dependencies>
-```
-
-
-
-#### 2. 版本兼容性说明
-
-- **Client 5.x**：支持 JDK 8 及以上版本，支持 RabbitMQ 3.x 服务器。这是目前最主流的选择
-- **Client 4.x**：较旧版本，通常用于 JDK 7 或更老的系统（不推荐）
-
-
-
-#### 3. 为什么不直接用 Spring Boot?
-
-- **原生 API**：你可以清晰地看到 `Connection` 是如何建立的，`Channel` 是如何创建的，以及 `ACK` 是如何手动提交的
-- **Spring Boot**：它封装了太多的细节（自动重连、自动序列化、自动 ACK）
-  - **如果跳过原生 API 直接学 Spring Boot，一旦生产环境出现“消息积压”或“连接泄露”，你将根本不知道去哪里调整参数**
-
-
-
-### 2.1 简单队列与工作队列
-
-#### 1. 核心 API 速查手册
-
-在看代码前，必须先死磕这几个方法的参数。后面全靠它们
-
-**类：`com.rabbitmq.client.Channel`** (所有核心操作都在 Channel 上，而不是 Connection 上)
-
-##### A. 声明队列 (`queueDeclare`)
-
-**作用**：定义一个队列。如果队列不存在则创建；如果存在但参数不一致则报错
-
-```java
-Queue.DeclareOk queueDeclare
-    				(String queue, boolean durable, boolean exclusive, boolean autoDelete, Map<String, Object> arguments)
-```
-
-- `queue`: **队列名称**
-- `durable`: **持久化**
-  - `true` = 写入磁盘（RabbitMQ 重启后队列还在）
-  - `false` = 仅存内存（RabbitMQ 重启后队列消失）
-- `exclusive`: **排他性**
-  - `true` = 只允许当前 Connection 访问，且连接断开后自动删除队列（通常用于临时队列）
-- `autoDelete`: **自动删除**
-  - `true` = 当最后一个消费者断开连接后，自动删除该队列
-- `arguments`: **扩展参数**（如 TTL 过期时间、最大长度、关联死信队列等）
-
-
-
-##### B. 发送消息 (`basicPublish`)
-
-**作用**：将消息投递到 Exchange
-
-```java
-void basicPublish(String exchange, String routingKey, BasicProperties props, byte[] body)
-```
-
-- `exchange`: **交换机名称**
-  - **重要**：如果传空字符串 `""`，代表使用 **Default Exchange**（直接投递模式）
-- `routingKey`: **路由键**
-  - 在使用默认交换机时，该值必须等于 **队列名称**
-- `props`: **消息属性**
-  - 常用 `MessageProperties.PERSISTENT_TEXT_PLAIN` 设置消息为持久化文本
-- `body`: **消息体**（字节数组）
-
-
-
-##### C. 消费消息 (`basicConsume`)
-
-**作用**：启动一个消费者监听队列
-
-```java
-String basicConsume(String queue, boolean autoAck, Consumer callback)
-```
-
-- `queue`: 监听的 **队列名**
-- `autoAck`: **自动应答机制**（非常关键）
-  - `true`: 消息一发给消费者，MQ 就认为由消费者“签收”了，直接从内存删除（**风险极大，处理失败会丢数据**）
-  - `false`: 需要消费者手动调用 `basicAck` 确认（**生产环境标准做法**）
-- `callback`: 回调接口，处理业务逻辑
-
-
-
-##### D. 流量控制 (`basicQos`)
-
-**作用**：设置“预取数量”（Prefetch Count）
-
-```
-void basicQos(int prefetchCount)
-```
-
-- `prefetchCount`: 告诉 MQ，“在我没确认（ACK）之前，不要给我发送超过 X 条消息”。
-- **意义**：这是解决“长尾效应”和实现“能者多劳”的关键配置。通常设置为 `1`。
-
-
-
-
-
-#### 2. 消息模型解析
-
-在写代码之前，必须先看懂这两个模型
-
-##### 模型一：简单队列 (Simple Queue)
-
-- **拓扑结构**：`P (Producer) -> Queue -> C (Consumer)`
-- **逻辑**：一对一。一个生产者对应一个消费者
-- **幕后黑手 —— Default Exchange**：
-  - 在简单队列中，我们通常直接把消息发给队列。但你是否记得 1.2 节说过“生产者不能直接发给队列”？
-  - **真相**：当你调用 `channel.basicPublish("", "hello_q", ...)` 时，第一个参数 `""` (空字符串) 实际上是告诉 RabbitMQ 使用 **默认交换机**
-  - **默认交换机规则**：它会自动将消息投递到 **RoutingKey 指定名称的队列** 中
-
-
-
-##### 模型二：工作队列 (Work Queue)
-
-- **拓扑结构**：`P (Producer) -> Queue -> C1, C2, C3... (Consumers)`
-
-- **场景**：
-
-  - 生产者发送任务的速度（例如 1000条/秒）远大于消费者处理的速度（例如 100条/秒）
-  - 这时通过增加消费者（C2, C3）来 **横向扩展** 处理能力
-
-- **核心机制对比**：
-
-  | 分发机制                | 描述                                                         | API 配置                        | 缺点/优点                                                    |
-  | ----------------------- | ------------------------------------------------------------ | ------------------------------- | ------------------------------------------------------------ |
-  | 轮询分发(Round-Robin)   | **(默认行为)** RabbitMQ 按顺序把消息平分给每个消费者<br />例：C1 拿第 1,3,5 条，C2 拿第 2,4,6 条 | `autoAck = true`或者未设置 QoS  | **缺点**：不考虑消费者的实际处理能力。如果 C1 处理很慢，C2 很快，C2 会闲死，C1 会累死，且整体效率低（长尾效应） |
-  | 公平分发(Fair Dispatch) | **(能者多劳)** 消费者告诉 MQ：“我都还没处理完（没回 ACK），别给我发新的”<br/>MQ 就会把消息发给其他空闲的消费者 | `basicQos(1)` `autoAck = false` | **优点**：能够充分利用集群性能，防止慢节点拖垮整体进度。这是生产环境的 **最佳实践** |
-
-
-
-#### 3. 生产级代码演示
-
-场景模拟：生产者发送 10 个耗时任务，两个消费者（Worker1 和 Worker2）争抢处理。
-
-##### 3.1 生产者 (TaskProducer.java)
-
-生产者负责源源不断地生产消息。注意资源释放的标准写法
-
-```java
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.ConnectionFactory;
-import com.rabbitmq.client.MessageProperties;
-
-public class TaskProducer {
-    // 定义队列名称
-    private static final String QUEUE_NAME = "work_queue_demo";
-
-    public static void main(String[] argv) throws Exception {
-        // 1. 创建连接工厂
-        ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost("localhost");
-        factory.setPort(5672);
-        factory.setUsername("admin");
-        factory.setPassword("admin");
-
-        // 2. 建立连接 (Connection) 和 信道 (Channel)
-        // 使用 try-with-resources 语法确保资源自动关闭 (Connection 和 Channel 都实现了 AutoCloseable)
-        try (Connection connection = factory.newConnection();
-             Channel channel = connection.createChannel()) {
-
-            // 3. 声明队列 (双保险：生产者和消费者都建议声明，防止谁先启动报错)
-            // 参数: queue, durable(持久化), exclusive, autoDelete, arguments
-            boolean durable = true; 
-            channel.queueDeclare(QUEUE_NAME, durable, false, false, null);
-
-            // 4. 模拟发送 10 条消息
-            for (int i = 0; i < 10; i++) {
-                String message = "Task No." + i;
-                
-                // 5. 发送消息
-                // 参数: exchange, routingKey, props, body
-                // MessageProperties.PERSISTENT_TEXT_PLAIN: 让消息持久化存储到磁盘
-                channel.basicPublish("", QUEUE_NAME, 
-                        MessageProperties.PERSISTENT_TEXT_PLAIN, 
-                        message.getBytes("UTF-8"));
-                
-                System.out.println(" [x] Sent '" + message + "'");
-            }
-        }
-    }
-}
-```
-
-
-
-##### 3.2 消费者 (WorkerConsumer.java)
-
-消费者需要长驻运行，且必须配置 QoS
-
-```java
-import com.rabbitmq.client.*;
-import java.io.IOException;
-
-public class WorkerConsumer {
-    private static final String QUEUE_NAME = "work_queue_demo";
-
-    public static void main(String[] argv) throws Exception {
-        // 1. 建立连接 (同生产者)
-        ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost("localhost");
-        factory.setUsername("admin");
-        factory.setPassword("admin");
-
-        // 消费者通常不需要关闭连接，因为需要一直监听
-        Connection connection = factory.newConnection();
-        Channel channel = connection.createChannel();
-
-        // 2. 声明队列
-        boolean durable = true;
-        channel.queueDeclare(QUEUE_NAME, durable, false, false, null);
-
-        // ================== 核心配置开始 ==================
-        
-        // 3. 设置 QoS (Quality of Service) - 公平分发关键
-        // prefetchCount = 1: 告诉 RabbitMQ，在我回传 ACK 之前，不要给我发新的消息。
-        // 这样 RabbitMQ 就会寻找其他空闲的消费者。
-        int prefetchCount = 1;
-        channel.basicQos(prefetchCount);
-
-        System.out.println(" [*] Waiting for messages. To exit press CTRL+C");
-
-        // 4. 定义消息处理的回调逻辑
-        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-            String message = new String(delivery.getBody(), "UTF-8");
-            System.out.println(" [x] Received '" + message + "'");
-
-            try {
-                // 模拟业务处理耗时 (例如 Worker1 休眠 1s，Worker2 休眠 2s)
-                doWork(message);
-            } finally {
-                // 5. 手动确认 (Manual ACK) - 必须在 finally 块中执行
-                // deliveryTag: 消息的唯一标签 (ID)
-                // multiple: false (仅确认当前这一条，不批量确认)
-                channel.basicAck(delivery.getEnvelope().getDeliveryTag(), false);
-                System.out.println(" [x] Done");
-            }
-        };
-
-        // 6. 启动监听
-        // autoAck = false: 关闭自动确认，开启手动确认模式
-        // 如果这里设为 true，上面的 basicQos 将失效！
-        boolean autoAck = false;
-        channel.basicConsume(QUEUE_NAME, autoAck, deliverCallback, consumerTag -> { });
-        
-        // ================== 核心配置结束 ==================
-    }
-
-    private static void doWork(String task) {
-        try {
-            Thread.sleep(1000); // 模拟耗时操作
-        } catch (InterruptedException _ignored) {
-            Thread.currentThread().interrupt();
-        }
-    }
-}
-```
-
-
-
-#### 4. 避坑指南
-
-1. **忘记 `basicAck` 的灾难**：
-   - **现象**：如果你设置了 `autoAck = false`，但在代码里的 `finally` 块忘记调用 `channel.basicAck`
-   - **后果**：
-     - RabbitMQ 认为你一直在处理中，消息状态一直是 **Unacked**。MQ 内存会逐渐撑爆，且当你重启消费者时，这些旧消息会像洪水一样重新涌入，导致死循环
-2. **`basicQos` 不生效**：
-   - **原因**：`basicQos` 必须配合 `autoAck = false` 使用。如果 `autoAck = true`，MQ 会无视 QoS 设置，瞬间把队列里的消息全部推送到你的客户端缓冲区
-3. **持久化不彻底**：
-   - 要保证重启不丢数据，必须满足三点：
-     1. **队列持久化** (`durable=true`)
-     2. **消息持久化** (`MessageProperties.PERSISTENT_TEXT_PLAIN`)
-     3. **交换机持久化** (这里用的是默认交换机，自带持久化)
-
-
-
-### 2.2 发布订阅模型
-
-> Publish/Subscribe - Fanout
-
-
-
-#### 1. 模型原理解析
-
-在之前的“工作队列”中，一条消息只能被一个消费者抢到。 而在“发布/订阅”模型中，我们要实现：**一条消息能被所有订阅者收到**
-
-- **拓扑结构**： `P (Producer) -> X (Exchange: Fanout) -> Q1, Q2... -> C1, C2...`
-- **核心机制**：
-  1. 生产者不再直接把消息发给队列，而是发给 **Fanout 类型的交换机**
-  2. 交换机收到消息后，会 **忽略 Routing Key**，直接把消息 **复制 (Copy)** 并转发给所有绑定到它的队列
-  3. 每个消费者都有自己 **独立** 的队列，因此都能收到完整的消息副本
-
-
-
-#### 2. 核心 API 速查
-
-要实现这个模型，我们需要用到几个新方法：
-
-##### A. 声明交换机 (`exchangeDeclare`)
-
-**作用**：在 MQ 中创建一个交换机
-
-```java
-Exchange.DeclareOk exchangeDeclare(String exchange, BuiltinExchangeType type)
-```
-
-- `exchange`: 交换机名称
-- `type`: 交换机类型。本节使用 `BuiltinExchangeType.FANOUT` (即 "fanout")
-
-
-
-##### B. 创建临时队列 (`queueDeclare().getQueue()`)
-
-**场景**：在广播模式下，消费者通常只关心“当前最新”的消息，不关心以前的。而且每个消费者都需要一个独立的队列
-
-**最佳实践**：让 MQ 自动生成一个随机命名的、排他的、自动删除的队列
-
-```java
-// 生成一个随机名字（如 amq.gen-JzTY2...），
-// 连接断开后自动删除 (Exclusive + AutoDelete)
-String queueName = channel.queueDeclare().getQueue();
-```
-
-
-
-##### C. 绑定队列 (`queueBind`)
-
-**作用**：把队列接到交换机上（插网线）
-
-```java
-Queue.BindOk queueBind(String queue, String exchange, String routingKey)
-```
-
-- `queue`: 队列名
-- `exchange`: 交换机名
-- `routingKey`: **在 Fanout 模式下无效**，通常传空字符串 `""`
-
-
-
-#### 3. 生产级代码实战
-
-场景模拟：**日志广播系统**
-
-- 生产者：`EmitLog`，发出日志消息
-- 消费者1：`SaveToDisk`，把日志存入磁盘（绑定到一个队列）
-- 消费者2：`PrintConsole`，把日志打印到屏幕（绑定到另一个队列）
-
-##### 3.1 生产者 (EmitLog.java)
-
-注意：生产者 **只声明交换机**，不声明队列。因为生产者根本不知道（也不关心）有多少个消费者在听
-
-```java
-import com.rabbitmq.client.BuiltinExchangeType;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.ConnectionFactory;
-
-public class EmitLog {
-    private static final String EXCHANGE_NAME = "logs_fanout";
-
-    public static void main(String[] argv) throws Exception {
-        ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost("localhost");
-        factory.setUsername("admin");
-        factory.setPassword("admin");
-
-        try (Connection connection = factory.newConnection();
-             Channel channel = connection.createChannel()) {
-
-            // 1. 声明 Fanout 交换机
-            // 必须声明，否则如果先启动生产者，交换机不存在会报错
-            channel.exchangeDeclare(EXCHANGE_NAME, BuiltinExchangeType.FANOUT);
-
-            String message = "Critical System Info: Database is down!";
-
-            // 2. 发送消息
-            // 这里的 routingKey 填空字符串，因为 Fanout 模式不看 Key
-            channel.basicPublish(EXCHANGE_NAME, "", null, message.getBytes("UTF-8"));
-            
-            System.out.println(" [x] Sent '" + message + "'");
-        }
-    }
-}
-```
-
-
-
-##### 3.2 消费者 (ReceiveLogs.java)
-
-消费者需要：声明交换机 -> 创建临时队列 -> 绑定 -> 消费
-
-```java
-import com.rabbitmq.client.*;
-
-public class ReceiveLogs {
-    private static final String EXCHANGE_NAME = "logs_fanout";
-
-    public static void main(String[] argv) throws Exception {
-        ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost("localhost");
-        factory.setUsername("admin");
-        factory.setPassword("admin");
-
-        Connection connection = factory.newConnection();
-        Channel channel = connection.createChannel();
-
-        // 1. 声明交换机 (消费者也声明，防止先启动消费者报错)
-        channel.exchangeDeclare(EXCHANGE_NAME, BuiltinExchangeType.FANOUT);
-
-        // 2. 获取临时队列
-        // 这是一个非持久化、排他、自动删除的随机队列
-        String queueName = channel.queueDeclare().getQueue();
-        System.out.println(" [*] Temporary Queue Name: " + queueName);
-
-        // 3. 绑定 (Binding)
-        // 核心步骤：告诉交换机，把消息转发到这个临时队列来
-        channel.queueBind(queueName, EXCHANGE_NAME, "");
-
-        System.out.println(" [*] Waiting for messages. To exit press CTRL+C");
-
-        // 4. 消费消息
-        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-            String message = new String(delivery.getBody(), "UTF-8");
-            System.out.println(" [x] Received '" + message + "'");
-        };
-
-        channel.basicConsume(queueName, true, deliverCallback, consumerTag -> { });
-    }
-}
-```
-
-
-
-#### 4. 避坑指南
-
-1. **启动顺序陷阱 (Lost Messages)**
-   - **现象**：如果你先启动生产者发消息，再启动消费者
-   - **结果**：**消息会全部丢失！**
-   - **原因**：Fanout 交换机不存消息。如果你发消息时没有任何队列绑定到它（消费者还没启动），消息就被丢进黑洞了
-   - *区别*：这与 Work Queue 不同，Work Queue 的消息会暂存在队列里等待
-2. **临时队列的特性**
-   - 一旦消费者断开连接（Ctrl+C），这个随机生成的队列会 **立即自动删除**。里面的数据也会消失。这非常适合“实时日志”这种不需要持久化的场景
-
-
-
-
-
-### 2.3 路由模型 (Routing - Direct)
-
-#### 1. 模型原理解析
-
-如果说 Fanout 是“无脑群发”，那么 Direct 就是“精准投递”
-
-- **拓扑结构**： `P -> X (Exchange: Direct) -> Binding(Key) -> Queue -> C`
-- **核心机制 (精确匹配)**：
-  - **规则**：消息的 **Routing Key** 必须 **完全等于** 队列绑定的 **Binding Key**，消息才会被转发到该队列
-  - **多重绑定**：一个队列可以用不同的 Binding Key 多次绑定到同一个交换机
-    - *例如*：队列 Q1 绑定了 `black` 和 `green`。那么路由键是 `black` 或 `green` 的消息它都能收到
-- **图解场景 (日志系统)**：
-  - **Exchange**: `logs_direct`
-  - **Queue A (磁盘)**: 绑定 key = `error`
-  - **Queue B (屏幕)**: 绑定 key = `info`, `warning`, `error`
-  - **结果**：
-    - 发送 `info` -> 只有 B 收到
-    - 发送 `error` -> A 和 B 都收到
-
-
-
-#### 2. 核心 API 速查
-
-跟 Fanout 的代码非常像，唯一的区别在于 **Binding 的时候不能传空字符串了**
-
-##### A. 声明 Direct 交换机
-
-```java
-channel.exchangeDeclare("logs_direct", BuiltinExchangeType.DIRECT);
-```
-
-
-
-##### B. 带 Key 绑定 (`queueBind`)
-
-这是路由模型的核心。你需要指定第三个参数
-
-```java
-// 意思是：这个队列只接收路由键为 "error" 的消息
-channel.queueBind(queueName, "logs_direct", "error");
-```
-
-
-
-#### 3. 生产级代码实战
-
-场景模拟：**智能日志路由**
-
-- **生产者**：发送不同级别 (`info`, `error`, `warning`) 的日志
-- **消费者1 (Disk)**：只把 `error` 存盘
-- **消费者2 (Console)**：把所有级别的日志都打印出来
-
-
-
-##### 3.1 生产者 (DirectEmitLog.java)
-
-生产者发送消息时，必须指定具体的 `Routing Key`
-
-```java
-import com.rabbitmq.client.BuiltinExchangeType;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.ConnectionFactory;
-
-public class DirectEmitLog {
-    private static final String EXCHANGE_NAME = "direct_logs";
-
-    public static void main(String[] argv) throws Exception {
-        ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost("localhost");
-        factory.setUsername("admin");
-        factory.setPassword("admin");
-
-        try (Connection connection = factory.newConnection();
-             Channel channel = connection.createChannel()) {
-
-            // 1. 声明 Direct 交换机
-            channel.exchangeDeclare(EXCHANGE_NAME, BuiltinExchangeType.DIRECT);
-
-            // 模拟发送三种级别的日志
-            String[] severities = {"error", "info", "warning"};
-
-            for (String severity : severities) {
-                String message = "Log info: This is a [" + severity + "] message";
-                
-                // 2. 发送消息
-                // 关键点：第二个参数 routingKey 必须填具体的值
-                channel.basicPublish(EXCHANGE_NAME, severity, null, message.getBytes("UTF-8"));
-                
-                System.out.println(" [x] Sent '" + severity + "':'" + message + "'");
-            }
-        }
-    }
-}
-```
-
-
-
-##### 3.2 消费者 (DirectReceiveLogs.java)
-
-为了演示灵活绑定，我们把绑定的 Keys 提取为参数
-
-```java
-import com.rabbitmq.client.*;
-
-public class DirectReceiveLogs {
-    private static final String EXCHANGE_NAME = "direct_logs";
-
-    public static void main(String[] argv) throws Exception {
-        ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost("localhost");
-        factory.setUsername("admin");
-        factory.setPassword("admin");
-
-        Connection connection = factory.newConnection();
-        Channel channel = connection.createChannel();
-
-        // 1. 声明交换机
-        channel.exchangeDeclare(EXCHANGE_NAME, BuiltinExchangeType.DIRECT);
-
-        // 2. 获取临时队列
-        String queueName = channel.queueDeclare().getQueue();
-
-        // ================== 核心配置：动态绑定 ==================
-        
-        // 模拟：我们想监听哪些级别的日志？
-        // 如果是 Consumer1 (Disk)，这里只写 new String[]{"error"};
-        // 如果是 Consumer2 (Console)，这里写 new String[]{"info", "warning", "error"};
-        String[] bindingKeys = new String[]{"info", "warning", "error"};
-
-        for (String key : bindingKeys) {
-            // 3. 绑定 (可以多次绑定！)
-            // 对每一个感兴趣的 Key，都执行一次 bind
-            channel.queueBind(queueName, EXCHANGE_NAME, key);
-            System.out.println(" [*] Bind to key: " + key);
-        }
-
-        // ======================================================
-
-        System.out.println(" [*] Waiting for messages...");
-
-        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-            String message = new String(delivery.getBody(), "UTF-8");
-            String routingKey = delivery.getEnvelope().getRoutingKey();
-            System.out.println(" [x] Received '" + routingKey + "':'" + message + "'");
-        };
-
-        channel.basicConsume(queueName, true, deliverCallback, consumerTag -> { });
-    }
-}
-```
-
-
-
-#### 4. 避坑指南
-
-1. **完全匹配原则**
-   - Direct 模式是非常“死板”的
-   - 如果绑定的是 `error`，发送的是 `error.critical`，**收不到！**
-   - 它不做任何模糊匹配（这是下一节 Topic 的工作）
-2. **没有匹配的消息去哪了？**
-   - 如果你发了一个 `debug` 级别的日志，但没有任何队列绑定了 `debug` 这个 Key
-   - 结果：**消息直接被丢弃**。RabbitMQ 不会帮你暂存它
-
-
-
-### 2.4 通配符模型 (Topics) —— 最强路由
-
-#### 1. 模型原理解析
-
-Topic 模型是 RabbitMQ 中 **最灵活、最常用** 的模型。它兼具了 Direct (精确) 和 Fanout (广播) 的能力
-
-- **核心规则**：
-
-  1. **Routing Key 必须是“点分字符串”**：
-     - 单词之间用 `.` 隔开
-     - 格式推荐：`<域>.<对象>.<动作>`
-     - *例子*：`user.order.create`, `sys.cron.1min`, `quick.orange.rabbit`
-  2. **Binding Key 支持通配符**：
-     - **`\*` (星号)**：只能匹配 **一个单词**
-     - **`#` (井号)**：可以匹配 **零个或多个单词**
-
-- **图解算法**： 假设消息的 Routing Key 是 `quick.orange.rabbit`
-
-  | Binding Key                | 结果     | 原因                                         |
-  | -------------------------- | -------- | -------------------------------------------- |
-  | `quick.orange.rabbit`      | ✅ 匹配   | 完全匹配 (等同于 Direct)                     |
-  | `*.orange.*`               | ✅ 匹配   | 中间是 orange，前后各一个单词                |
-  | `*.*.rabbit`               | ✅ 匹配   | 最后一个单词是 rabbit                        |
-  | `quick.#`                  | ✅ 匹配   | quick 开头，后面不管有几个单词               |
-  | `#.rabbit`                 | ✅ 匹配   | rabbit 结尾，前面不管有几个单词              |
-  | `quick.orange.male.rabbit` | ❌ 不匹配 | `*.orange.*` 无法匹配，因为 `*` 只能占一个坑 |
-
-
-
-#### 2. 核心 API 速查
-
-代码结构与 Direct 几乎一致，唯一的区别是交换机类型
-
-##### A. 声明 Topic 交换机
-
-```java
-channel.exchangeDeclare("topic_logs", BuiltinExchangeType.TOPIC);
-```
-
-
-
-#### 3. 生产级代码实战
-
-场景模拟：**生态系统监控**。 我们发送的消息 Routing Key 格式为：`<设施>.<严重性>` (例如: `kern.critical`, `auth.info`)
-
-- **消费者1 (核心报警)**：只关心所有设施的 `critical` 错误
-- **消费者2 (内核日志)**：关心 `kern` 设施下的所有日志
-
-
-
-##### 3.1 生产者 (TopicEmitLog.java)
-
-```java
-import com.rabbitmq.client.BuiltinExchangeType;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.ConnectionFactory;
-
-import java.util.HashMap;
-import java.util.Map;
-
-public class TopicEmitLog {
-    private static final String EXCHANGE_NAME = "topic_logs";
-
-    public static void main(String[] argv) throws Exception {
-        ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost("localhost");
-        factory.setUsername("admin");
-        factory.setPassword("admin");
-
-        try (Connection connection = factory.newConnection();
-             Channel channel = connection.createChannel()) {
-
-            // 1. 声明 Topic 交换机
-            channel.exchangeDeclare(EXCHANGE_NAME, BuiltinExchangeType.TOPIC);
-
-            // 模拟发送不同设施、不同级别的日志
-            Map<String, String> logs = new HashMap<>();
-            logs.put("kern.critical", "A critical kernel error");
-            logs.put("kern.info", "Kernel updated");
-            logs.put("auth.info", "User login success");
-            logs.put("cron.critical", "Job failed");
-
-            for (Map.Entry<String, String> entry : logs.entrySet()) {
-                String routingKey = entry.getKey();
-                String message = entry.getValue();
-
-                // 2. 发送消息
-                channel.basicPublish(EXCHANGE_NAME, routingKey, null, message.getBytes("UTF-8"));
-                
-                System.out.println(" [x] Sent '" + routingKey + "':'" + message + "'");
-            }
-        }
-    }
-}
-```
-
-##### 3.2 消费者 (TopicReceiveLogs.java)
-
-```java
-import com.rabbitmq.client.*;
-
-public class TopicReceiveLogs {
-    private static final String EXCHANGE_NAME = "topic_logs";
-
-    public static void main(String[] argv) throws Exception {
-        ConnectionFactory factory = new ConnectionFactory();
-        factory.setHost("localhost");
-        factory.setUsername("admin");
-        factory.setPassword("admin");
-
-        Connection connection = factory.newConnection();
-        Channel channel = connection.createChannel();
-
-        channel.exchangeDeclare(EXCHANGE_NAME, BuiltinExchangeType.TOPIC);
-        String queueName = channel.queueDeclare().getQueue();
-
-        // ================== 核心配置：通配符绑定 ==================
-        
-        // 场景 A: 我想接收所有 "critical" (严重) 的日志
-        // Binding Key: "#.critical"
-        // 解释: 无论前面是 kern 还是 cron，只要结尾是 critical 就行
-        // channel.queueBind(queueName, EXCHANGE_NAME, "#.critical");
-
-        // 场景 B: 我想接收所有 "kern" (内核) 的日志
-        // Binding Key: "kern.*"
-        // 解释: kern 开头，后面只能跟一个单词 (如果是 kern.a.b 则不匹配)
-         channel.queueBind(queueName, EXCHANGE_NAME, "kern.*");
-
-        // 场景 C (组合): 既要 kern又要 critical
-        String[] bindingKeys = new String[]{"#.critical", "kern.*"};
-        for (String key : bindingKeys) {
-            channel.queueBind(queueName, EXCHANGE_NAME, key);
-            System.out.println(" [*] Binding key: " + key);
-        }
-
-        // ======================================================
-
-        System.out.println(" [*] Waiting for messages...");
-
-        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-            String message = new String(delivery.getBody(), "UTF-8");
-            String routingKey = delivery.getEnvelope().getRoutingKey();
-            System.out.println(" [x] Received '" + routingKey + "':'" + message + "'");
-        };
-
-        channel.basicConsume(queueName, true, deliverCallback, consumerTag -> { });
-    }
-}
-```
-
-
-
-#### 4. 避坑指南
-
-1. **`\*` 与 `#` 的致命误区**
-   - `*` 是 **占位符**（必须占 1 个坑）
-     - 路由键 `user` **不能** 匹配 `user.*`（因为 `.` 后面缺一个词）
-     - 路由键 `user.login` **能** 匹配 `user.*`
-   - `#` 是 **万能符**（0 或 N 个坑）
-     - 路由键 `user` **能** 匹配 `user.#`（后面 0 个词）
-     - 路由键 `user.login.fail` **能** 匹配 `user.#`（后面 N 个词）
-2. **退化现象**
-   - 如果 Binding Key 是 `#` ——> 这就是 **Fanout**（接收所有）
-   - 如果 Binding Key 不含任何 `*` 或 `#` ——> 这就是 **Direct**（精确匹配）
-
-
-
-## 三：Spring Boot 整合与实战 (核心开发) ⭐
-
-**阶段综述**： 在原生 API 中，我们必须手动处理 Connection 的建立与关闭、Channel 的复用、异常的捕获。而在 Spring Boot 中，这一切都被 `spring-boot-starter-amqp` 封装在黑盒之下。 本阶段的目标是：**既要享受 Spring 的便利，又要懂得黑盒里的机制，防止生产环境出现“连接泄露”或“配置失效”。**
-
-### 3.1 核心配置与自动配置原理
-
-#### 1. 环境搭建
+#### A. 依赖引入
 
 在 Spring Boot 项目中，我们不再需要像第二阶段那样单独引入 `amqp-client`
 
 - Spring Boot 提供了一个“开箱即用”的 Starter，它不仅包含了客户端驱动，还包含了自动化配置模块
-
-##### Maven 配置 (`pom.xml`)
-
-请在 `dependencies` 标签中添加：
 
 ```xml
 <dependency>
@@ -1493,26 +674,14 @@ public class TopicReceiveLogs {
     <!-- 
       注意：通常无需指定版本号 (<version>)。
       版本会由 spring-boot-starter-parent 统一管理，
-      确保与你的 Spring Boot 版本兼容。
+      确保与你的 Spring Boot 版本兼容
     -->
 </dependency>
 ```
 
-- ##### 依赖解析
-
-  - 引入这个 Starter 后，Maven 会自动拉取以下核心 jar 包
-
-    1. **`spring-amqp`**：Spring 对 AMQP 协议的抽象层
-    2. **`spring-rabbit`**：Spring 对 RabbitMQ 的具体实现（包含 `RabbitTemplate`, `RabbitAdmin` 等核心类）
-    3. **`amqp-client`**：RabbitMQ 官方提供的 Java 底层驱动（就是我们第二阶段用的那个）
-
-    
-
-**开发建议**： 建议创建一个全新的 Spring Boot 工程（勾选 "Spring for RabbitMQ" 模块）来开始本阶段的练习，保持环境纯净
 
 
-
-#### 2. 生产级配置 (`application.yml`)
+#### B. 配置 (`application.yml`)
 
 不要只配 host 和 port，以下是生产环境的标准配置模板：
 
@@ -1587,270 +756,9 @@ spring:
 
 
 
-#### 3. Spring 是如何管理连接的？
+#### C. 监听序列化器替换
 
-这是从原生 API 转到 Spring 后最大的思维转变
-
-##### A.`CachingConnectionFactory `连接工厂
-
-- **原生 API 的痛点**： 我们需要手动调用 `factory.newConnection()`，并且要小心翼翼地维护它。一旦网络波动断开，还得写一堆代码去重连
-
-- **Spring AMQP 的解法**：
-
-  - **单例连接机制**：Spring 默认只创建一个 **单例的 Connection**（这也符合 RabbitMQ 官方的性能建议）
-  - **缓存机制**：它默认 **不缓存 Connection**，而是 **缓存 Channel (信道)**
-
-  
-
-- **工作流程详解**：
-
-  1. 当 `RabbitTemplate` 需要发送消息时，它向 Factory 申请一个 Channel
-  2. Factory 检查缓存池（`cache.channel.size`，默认25）里有没有空闲的？
-  3. **有** -> 直接复用
-  4. **没有** -> 基于那条唯一的 Connection 创建一个新的 Channel
-  5. **用完后** -> 不会关闭 Channel，而是把它重置后放回缓存池
-
-- **性能瓶颈预警**： 如果你的业务并发极高（例如每秒几千次发送），默认的 25 个 Channel 缓存可能瞬间被耗尽，导致线程阻塞等待 Channel
-
-  - *对策*：在 `application.yml` 中调大 `spring.rabbitmq.cache.channel.size`
-
-  
-
-##### B.`RabbitAdmin `自动化管理员
-
-- **作用**： 它是 Spring AMQP 的运维管家。它负责扫描 Spring 容器中的 `@Bean`，自动去 RabbitMQ Server 上创建对应的 Exchange、Queue 和 Binding
-- **Lazy Declaration (懒加载声明)**：
-  - **现象**：你定义好了 Queue 的 Bean，启动项目，去 MQ 控制台看，发现队列 **并没有出现** ！你以为配置挂了
-  - **真相**：Spring 采用的是 **懒加载** 策略。`RabbitAdmin` 只有在 **第一次与 MQ 建立连接时** 才会去执行声明操作
-  - **触发点**：
-    1. 第一次发送消息时
-    2. 第一次监听器启动时
-  - *验证方法*：写个单元测试随便发一条消息，队列自然就出现了
-
-
-
-#### 4. 实战：声明式结构定义
-
-在 Spring Boot 中，我们将 AMQP 的拓扑结构定义为配置类中的 Bean
-
-- `RabbitAdmin` 会自动扫描这些 Bean 并同步到 RabbitMQ Server
-
-创建一个配置类 `RabbitConfig.java`：
-
-```java
-import org.springframework.amqp.core.*;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-
-@Configuration
-public class RabbitConfig {
-
-    // ==========================================
-    // 1. 定义队列 (Queue)
-    // ==========================================
-    @Bean
-    public Queue orderQueue() {
-        // 参数说明：
-        // 1. name: 队列名称 "boot.order.q"
-        // 2. durable: 是否持久化 (true = 重启还在)
-        // 3. exclusive: 是否排他 (false = 所有连接都能访问)
-        // 4. autoDelete: 是否自动删除 (false = 哪怕没消费者也不删)
-        return new Queue("boot.order.q", true, false, false);
-        
-        // 或者使用 Builder 模式 (更易读)：
-        // return QueueBuilder.durable("boot.order.q").build();
-    }
-
-    // ==========================================
-    // 2. 定义交换机 (Exchange)
-    // ==========================================
-    @Bean
-    public DirectExchange orderExchange() {
-        // 定义一个 Direct 类型的交换机
-        // 参数: name, durable, autoDelete
-        return new DirectExchange("boot.order.ex", true, false);
-    }
-
-    // ==========================================
-    // 3. 定义绑定关系 (Binding)
-    // ==========================================
-    @Bean
-    public Binding orderBinding() {
-        // 核心逻辑：把 orderQueue 绑定到 orderExchange
-        // 路由键 (RoutingKey) 为 "order.create"
-        // 翻译：只有 RoutingKey = "order.create" 的消息，才会进 boot.order.q
-        return BindingBuilder
-                .bind(orderQueue())
-                .to(orderExchange())
-                .with("order.create");
-    }
-}
-```
-
-
-
-#### 5. 避坑指南
-
-这是新手最容易遇到的 **启动失败** 原因
-
-- **场景还原**：
-  1. 你第一次定义 Bean 时，写的是 `durable=false`（非持久化）
-  2. 启动项目，RabbitMQ 创建了这个队列
-  3. 后来你觉得不对，修改代码为 `durable=true`（持久化）
-  4. 再次启动项目
-- **结果**：
-  - **报错**：`Channel shutdown: channel error; protocol method: #method<channel.close>(reply-code=406, reply-text=PRECONDITION_FAILED - inequivalent arg 'durable'...)`
-  - **原因**：RabbitMQ 不允许重新定义已存在的队列，除非所有参数完全一致
-- **解决方案**：
-  - **粗暴法**：去 RabbitMQ 管理控制台，手动删除那个旧队列，然后重启项目
-  - **代码法**：给队列换个新名字（生产环境不推荐）
-
-
-
-### 3.2 RabbitTemplate API（发送）
-
-#### 1. 核心 API 速查手册
-
-`RabbitTemplate` 是线程安全的，可以在 Service 中直接注入使用
-
-##### A. 基础发送 (`convertAndSend`)
-
-最常用的方法。Spring 会自动将你的 Java 对象（Object）序列化为二进制（byte[]），然后封装成 AMQP 消息发送
-
-```java
-// 1. 发送到默认交换机 (RoutingKey = 队列名)
-// routingKey: 路由键
-//    * 由于没指定交换机，默认使用 Default Exchange
-//    * 此时 RoutingKey 必须完全等于 目标队列名 才能被收到
-// object: 消息体
-//    * 你要发的实际业务数据 (String, User, Map 等)
-void convertAndSend(String routingKey, Object object);
-
-// 2. 发送到指定交换机 (最常用)
-// exchange: 交换机名称
-//    * 指定消息要发给哪个交换机 (例如 "boot.order.ex")
-// routingKey: 路由键
-//    * 交换机根据这个 Key 决定转发给哪个队列 (例如 "order.create")
-// object: 消息体
-void convertAndSend(String exchange, String routingKey, Object object);
-```
-
-
-
-##### B. 进阶发送 (`MessagePostProcessor`)
-
-如果你需要在发送时设置 **消息过期时间 (TTL)**、**优先级** 或 **自定义 Header**，必须使用这个重载方法
-
-```java
-// 前三个参数同上...
-// mpp (MessagePostProcessor): 消息后置处理器
-//    * 这是一个函数式接口
-//    * Spring 在把对象转成 Message 后，发给 RabbitMQ 前，会回调这个接口
-//    * 你可以在这里拿到 Message 对象，随意修改它的 Header 和 Properties
-void convertAndSend(String exchange, String routingKey, Object object, MessagePostProcessor mpp);
-```
-
-
-
-#### 2. 生产级代码实战
-
-我们在 `OrderService` 中演示不同场景的发送逻辑
-
-```java
-import org.springframework.amqp.AmqpException;
-import org.springframework.amqp.core.Message;
-import org.springframework.amqp.core.MessagePostProcessor;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-
-@Service
-public class OrderService {
-
-    @Autowired
-    private RabbitTemplate rabbitTemplate;
-
-    // 定义交换机和路由键常量 (与 3.1 节 RabbitConfig 对应)
-    private static final String EXCHANGE_NAME = "boot.order.ex";
-    private static final String ROUTING_KEY = "order.create";
-
-    /**
-     * 场景 1: 发送简单的字符串或对象
-     */
-    public void sendStringMessage() {
-        String msg = "New Order Created: " + UUID.randomUUID();
-        
-        // 参数: 交换机, 路由键, 消息体
-        rabbitTemplate.convertAndSend(EXCHANGE_NAME, ROUTING_KEY, msg);
-        
-        System.out.println(" [x] Sent String: " + msg);
-    }
-
-    /**
-     * 场景 2: 发送 Java Map (模拟 JSON)
-     * 注意：默认使用 JDK 序列化，消费者接收时会看到乱码，下节课我们解决这个问题
-     */
-    public void sendMapMessage() {
-        Map<String, Object> orderMap = new HashMap<>();
-        orderMap.put("orderId", "1001");
-        orderMap.put("price", 99.9);
-        orderMap.put("user", "admin");
-
-        rabbitTemplate.convertAndSend(EXCHANGE_NAME, ROUTING_KEY, orderMap);
-        
-        System.out.println(" [x] Sent Map: " + orderMap);
-    }
-
-    /**
-     * 场景 3: 发送带有过期时间 (TTL) 的消息
-     * 使用 MessagePostProcessor 在消息发出前"加工"一下
-     */
-    public void sendExpirationMessage() {
-        String msg = "This message will die in 5 seconds";
-
-        // Lambda 表达式写法
-        rabbitTemplate.convertAndSend(EXCHANGE_NAME, ROUTING_KEY, msg, message -> {
-            // 设置消息属性
-            // setExpiration 单位是字符串类型的毫秒
-            message.getMessageProperties().setExpiration("5000");
-            
-            // 还可以设置 Header
-            message.getMessageProperties().setHeader("source", "mobile-app");
-            
-            return message;
-        });
-        
-        System.out.println(" [x] Sent TTL Message: " + msg);
-    }
-}
-```
-
-
-
-#### 3. 避坑指南
-
-1. **JDK 序列化的坑 (The Serialization Trap)**
-   - **现象**：你发了一个 String 或 Map，去 RabbitMQ 控制台看消息体，发现是一堆看不懂的乱码（如 `\xAC\xED\x00\x05t...`）
-   - **原因**：`RabbitTemplate` 默认使用 `SimpleMessageConverter`，它基于 Java 原生的 `ObjectOutputStream` 进行序列化
-   - **后果**：
-     1. 消息体积大
-     2. 跨语言不兼容（Python 消费者解不开 Java 的序列化数据）
-     3. 具有安全风险
-   - **预告**：我们将在 **3.3 节** 引入 Jackson，把消息变成通用的 JSON 格式
-2. **RoutingKey 填错**
-   - Spring 不会校验你的 RoutingKey 是否正确。如果你填了一个不存在的 Key，消息发给交换机后，因为匹配不到队列，会被直接 **丢弃**（除非配置了回退）
-
-
-
-
-
-### 3.3 监听序列化器替换
-
-#### 1. 为什么必须换掉默认的序列化器？
+##### a. 为什么必须换掉默认的序列化器？
 
 Spring AMQP 默认使用的 `SimpleMessageConverter` 基于 JDK 的 `ObjectOutputStream`
 
@@ -1862,7 +770,7 @@ Spring AMQP 默认使用的 `SimpleMessageConverter` 基于 JDK 的 `ObjectOutpu
 
 
 
-#### 2. 实战：配置 Jackson 消息转换器
+##### b. 实战：配置 Jackson 消息转换器
 
 我们需要修改（或新增）配置类，向 Spring 容器注入一个 `MessageConverter` Bean
 
@@ -1895,7 +803,7 @@ public class RabbitConfig {
 
 
 
-#### 3. 依赖检查
+##### c. 依赖检查
 
 `Jackson2JsonMessageConverter` 依赖于 Jackson 核心包。通常 `spring-boot-starter-web` 已经包含了它
 
@@ -1910,7 +818,7 @@ public class RabbitConfig {
 
 
 
-#### 4. 效果验证
+##### d. 效果验证
 
 配置好这个 Bean 后，你可以重新运行 3.2 节的 `sendMapMessage()` 方法
 
@@ -1928,20 +836,122 @@ public class RabbitConfig {
 
 
 
+#### D. 发送神器：`RabbitTemplate`
+
+`RabbitTemplate` 是 Spring AMQP 提供的核心发送工具，它是 **线程安全** 的，因此你可以在 Service 中放心注入并单例使用
+
+它最大的贡献是将底层复杂的 `basicPublish` 方法封装成了人性化的 `convertAndSend`
+
+##### 1. 核心 API 速查
+
+```JAVA
+// 1. 发送到默认交换机 (RoutingKey = 队列名)
+// routingKey: 路由键
+//    * 由于没指定交换机，默认使用 Default Exchange
+//    * 此时 RoutingKey 必须完全等于 目标队列名 才能被收到
+// object: 消息体
+//    * 你要发的实际业务数据 (String, User, Map 等)
+void convertAndSend(String routingKey, Object object);
+
+// 2. 发送到指定交换机 (最常用)
+// exchange: 交换机名称
+//    * 指定消息要发给哪个交换机 (例如 "boot.order.ex")
+// routingKey: 路由键
+//    * 交换机根据这个 Key 决定转发给哪个队列 (例如 "order.create")
+// object: 消息体
+void convertAndSend(String exchange, String routingKey, Object object);
+
+// 前三个参数同上...
+// mpp (MessagePostProcessor): 消息后置处理器
+//    * 这是一个函数式接口
+//    * Spring 在把对象转成 Message 后，发给 RabbitMQ 前，会回调这个接口
+//    * 你可以在这里拿到 Message 对象，随意修改它的 Header 和 Properties
+void convertAndSend(String exchange, String routingKey, Object object, MessagePostProcessor mpp);
+```
 
 
-### 3.3 注解式监听 (`@RabbitListener`)
+
+##### 2. 生产级代码实战
+
+我们在 `OrderService` 中演示不同场景的发送逻辑
+
+```JAVA
+@Service
+public class OrderService {
+
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
+
+    // 常量定义，防止手抖写错
+    private static final String EX_NAME = "hmall.direct";
+
+    /**
+     * 场景 A: 发送普通 JSON 消息
+     */
+    public void sendOrder() {
+        Map<String, Object> order = new HashMap<>();
+        order.put("id", 1001);
+        order.put("price", 99.00);
+
+        // 自动序列化：Map -> JSON String -> byte[]
+        rabbitTemplate.convertAndSend(EX_NAME, "order.create", order);
+        
+        System.out.println("发送成功");
+    }
+
+    /**
+     * 场景 B: 发送“高级”消息 (MessagePostProcessor)
+     * 需求：给消息设置 10秒 过期时间 (TTL)，并携带一个 TraceId 用于链路追踪
+     */
+    public void sendAdvancedOrder() {
+        String msg = "vip order";
+
+        // 第 4 个参数是函数式接口 MessagePostProcessor
+        // 它允许你在消息被序列化后、发给 MQ 之前，最后一次修改消息属性
+        rabbitTemplate.convertAndSend(EX_NAME, "order.vip", msg, message -> {
+            
+            // 1. 设置消息属性 (MessageProperties)
+            // setExpiration: 设置单条消息 TTL (单位: 毫秒字符串)
+            message.getMessageProperties().setExpiration("10000");
+            
+            // 2. 设置持久化 (Spring 默认就是 PERSISTENT，这里仅作演示)
+            message.getMessageProperties().setDeliveryMode(MessageDeliveryMode.PERSISTENT);
+
+            // 3. 设置自定义 Header (透传业务数据)
+            message.getMessageProperties().setHeader("trace-id", UUID.randomUUID().toString());
+            message.getMessageProperties().setHeader("source", "mobile-app");
+            
+            // 必须返回修改后的 message 对象
+            return message;
+        });
+        
+        System.out.println("高级消息发送成功");
+    }
+}
+```
+
+##### 3. 避坑指南
+
+1. **RoutingKey 写错的后果**：
+   - 如果你调用 `convertAndSend("ex", "wrong.key", msg)`
+   - **结果**：RabbitMQ 交换机收到消息后，发现找不到匹配的 Binding，会 **直接丢弃** 消息（Silent Drop），且 **不会报错**
+   - **对策**：如果业务不允许丢消息，必须开启 `Publisher Returns` 机制（我们在可靠性章节详解）
+2. **不要在循环里创建 Template**：
+   - 虽然 `RabbitTemplate` 本身很轻量，但它背后的 `Connection` 和 `Channel` 资源很重
+   - **禁止**在方法内部 `new RabbitTemplate()`，必须使用 Spring 容器注入的单例对象
 
 
 
-#### 0. `@RabbitListener` 注解 (核心基础)
+#### E. 注解式监听 (`@RabbitListener`)
 
-##### 简述
+##### 0. `@RabbitListener` 注解 (核心基础)
+
+###### 简述
 
 - `@RabbitListener` 是 Spring AMQP 提供的魔法注解，它的底层是一个 **异步消息监听容器**
   - 一旦你在方法上加了这个注解，Spring 就会在后台启动线程去 RabbitMQ 拉取消息
 
-##### **常用参数速查**
+###### **常用参数速查**
 
 - **`queues`** (最常用)
 
@@ -1974,7 +984,7 @@ public class RabbitConfig {
 
 
 
-##### **补充参数：`bindings` (高级声明式绑定)**
+###### **补充参数：`bindings` (高级声明式绑定)**
 
 这是一个 **“懒人神器”**。它和 `queues` 参数是 **二选一** 的关系
 
@@ -2058,7 +1068,7 @@ public void listenDirectQueue1(String msg){
 
 
 
-#### 1. 前置检查
+##### 1. 前置检查
 
 在写代码前，请务必确认 `application.yml` 中已开启手动确认模式（除非你在注解里单独配置了 `ackMode`）：
 
@@ -2073,7 +1083,7 @@ spring:
 
 
 
-#### 2. 生产级代码实战：订单消费者
+##### 2. 生产级代码实战：订单消费者
 
 我们将创建一个监听器，模拟处理订单逻辑。请注意 `try-catch-finally` 的结构，这是标准模版
 
@@ -2139,11 +1149,11 @@ public class OrderListener {
 
 
 
-#### 3. 核心机制：方法参数注入
+##### 3. 核心机制：方法参数注入
 
 Spring AMQP 非常智能，它会利用 **反射机制** 检查你定义的方法参数类型，然后自动注入对应的内容。你不需要死记顺序，只需要知道它支持哪些类型
 
-##### A. 支持的参数类型清单
+###### A. 支持的参数类型清单
 
 | 参数类型                                    | 注入内容           | 必须性 (手动ACK模式) | 用途                                                     |
 | ------------------------------------------- | ------------------ | -------------------- | -------------------------------------------------------- |
@@ -2154,7 +1164,7 @@ Spring AMQP 非常智能，它会利用 **反射机制** 检查你定义的方�
 
 
 
-##### B. 常见写法组合
+###### B. 常见写法组合
 
 **写法 1：最全写法 (生产标准)**
 
@@ -2184,7 +1194,7 @@ public void handle(User user) {
 
 
 
-##### C. 致命陷阱：参数缺失导致“假死”
+###### C. 致命陷阱：参数缺失导致“假死”
 
 - **场景**：你在 `application.yml` 里配了 `manual` (手动确认)，但是方法签名里**只写了** `void handle(User user)`，**忘记写** `Channel` 和 `Message`
 - **后果**：
@@ -2195,7 +1205,7 @@ public void handle(User user) {
 
 
 
-#### 4. 核心 API
+##### 4. 核心 API
 
 在 catch 块中，我们有三种方式处理失败的消息：
 
@@ -2207,7 +1217,7 @@ public void handle(User user) {
 
 
 
-#### 5. 避坑指南
+##### 5. 避坑指南
 
 1. **无限重试风暴**
    - **场景**：你在 `catch` 块中写了 `channel.basicNack(tag, false, true)`（重回队列）
@@ -2221,7 +1231,7 @@ public void handle(User user) {
 
 
 
-### 3.4 交换机
+### 1. 交换机与 Bean声明
 
 #### A Direct Exchange (直连交换机)
 
@@ -2603,8 +1613,8 @@ public class FanoutListener {
 > >
 > > ```java
 > > exchange = @Exchange(
-> >         name = MqConstants.Exchange.ORDER_EXCHANGE,
-> >         type = ExchangeTypes.TOPIC
+> >   name = MqConstants.Exchange.ORDER_EXCHANGE,
+> >   type = ExchangeTypes.TOPIC
 > > ),
 > > ```
 
@@ -2808,7 +1818,596 @@ public class TopicListener {
 
 
 
-### 3.5 RabbitMQ 补充知识：ACK 机制
+
+
+### 2. 五大消息模型
+
+#### A. 简单队列 (Simple Queue)
+
+这是最基础的模型，也是 **“点对点 (Point-to-Point)”** 通信的雏形
+
+**1. 模型定义**
+
+- **名称含义**：这里的“简单队列”并非 RabbitMQ 中有一种特殊队列叫 SimpleQueue，而是指 **“P -> Q -> C”** 这种最简单的 **1对1** 拓扑结构
+- **场景**：系统 A 发送一条指令，系统 B 接收并处理。没有广播，没有复杂的路由
+
+
+
+**2. 核心原理：默认交换机 (The Invisible Hand)**
+
+你可能会问：*“不是说消息必须发给交换机吗？为什么在这个模型里，生产者直接发给了队列？”*
+
+- **真相**：AMQP 协议中不存在“直连队列”的操作
+- **幕后机制**：
+  1. 当我们调用 `convertAndSend("simple.q", msg)` 时，Spring 实际上是把消息发给了 **默认交换机 (Default Exchange)**（名字为空字符串 `""`）
+  2. 默认交换机的路由规则是：**“RoutingKey 必须完全等于队列名”**
+  3. 所以，我们填写的 `"simple.q"` 既是 **RoutingKey**，也是目标 **队列名**
+
+
+
+**3. Spring 实战**
+
+**A. 消费者 (Consumer) —— 队列的“创造者”**
+
+在 Spring Boot 最佳实践中，通常由 **消费者** 负责声明队列。因为消费者依赖这个队列来吃饭，它必须保证队列存在
+
+```java
+import org.springframework.amqp.rabbit.annotation.Queue;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.stereotype.Component;
+
+@Component
+public class SimpleConsumer {
+
+    // 【关键】queuesToDeclare
+    // 含义：Spring 启动时会去检查 RabbitMQ，如果 "simple.q" 不存在，就自动创建一个持久化队列。
+    // 作用：消费者定义了“收件地址”。
+    @RabbitListener(queuesToDeclare = @Queue("simple.q"))
+    public void listen(String msg) {
+        System.out.println("【Simple】收到消息: " + msg);
+    }
+}
+```
+
+
+
+**B. 生产者 (Producer) —— 队列的“使用者”**
+
+生产者不需要知道队列是怎么建的，它只需要知道“往哪个地址发”。
+
+```java
+@Autowired
+private RabbitTemplate rabbitTemplate;
+
+public void sendSimple() {
+    // 【关键】这里的字符串必须和消费者注解里的名字一模一样
+    // 作用：生产者照着“收件地址”投递。
+    String targetQueue = "simple.q"; 
+    String msg = "Hello, RabbitMQ!";
+    
+    // 发送给默认交换机，RoutingKey = "simple.q"
+    rabbitTemplate.convertAndSend(targetQueue, msg);
+    
+    System.out.println("已发送: " + msg);
+}
+```
+
+**4. 深度释疑：为什么两头都要写 "simple.q"？**
+
+这就像 **寄快递**：
+
+- **消费者**（收件人）在自家门口挂了个信箱，上面写着“No.10086”（声明队列）。
+- **生产者**（寄件人）在快递单上填地址“No.10086”（指定 RoutingKey）。
+- **RabbitMQ**（邮局）负责比对：只有当快递单上的地址 **等于** 信箱上的号码时，信才能投递成功。
+
+如果两边名字不一致（比如一个写 `simple.q`，一个写 `Simple.q`），就像地址写错了，消息会直接丢弃。
+
+
+
+
+
+
+
+#### B. 工作队列 (Work Queue)
+
+##### a. 模型演进
+
+- **拓扑**：`P -> Queue -> C1, C2...`
+- **场景**：当生产者的发送速度远大于消费者的处理速度时，单一消费者处理不过来，导致积压
+- **对策**：增加消费者数量进行 **横向扩展**，共同分担队列里的消息
+
+
+
+##### b. 分发机制：轮询 vs 公平
+
+| 分发机制     | 描述                                                         | 缺点/优点                                                    | 配置方式                              |
+| ------------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------- |
+| **轮询分发** | **(是默认行为)** 不管消费者忙不忙，MQ 依次把消息平分给每个消费者。例：C1 拿第 1,3,5 条，C2 拿第 2,4,6 条 | **缺点**：不考虑消费者的实际能力。如果 C1 很慢，C2 很快，会导致 C1 累死，C2 闲死（长尾效应） | `prefetch` 未配置 (默认)              |
+| **公平分发** | **(能者多劳)** 消费者告诉 MQ：“我手头这条没处理完（没 Ack）之前，别给我发新的” | **优点**：能者多劳，吞吐量最大化<br />**缺点**：有些许网络交互开销 | `prefetch: 1`<br />(可见前文配置那里) |
+
+
+
+##### C. 核心配置 (开启能者多劳)
+
+在原生 API 中，我们需要在每个消费者代码里手动写 `channel.basicQos(1)`，非常繁琐且容易漏写
+
+- 而在 Spring Boot 中，这个配置被简化为了配置文件中的一行全局参数
+
+
+
+通过调整 **预取数量 (Prefetch Count)**，我们可以精准控制消费者“一次从 MQ 拿多少任务”,默认情况下是 250 
+
+**配置实战 (`application.yml`)：**
+
+```yaml
+spring:
+  rabbitmq:
+    listener:
+      simple:
+        # 【关键配置】预取数量
+        # 默认值：250 (Spring Boot 默认会预取较多消息，导致轮询的效果)
+        # 设置为 1：开启"能者多劳"模式 (Fair Dispatch)
+        prefetch: 1
+        
+        # 【原理深度解析】
+        # 1. 为什么是 1？
+        #    这意味着消费者告诉 MQ："我内存里最多只能积压 1 条未处理的消息。
+        #    在我把这条处理完（回传 ACK）之前，绝对不要给我发第 2 条。"
+        # 
+        # 2. 效果推演：
+        #    - 快消费者：处理完 1 条 -> 发 ACK -> MQ 立刻发新的 -> 始终忙碌
+        #    - 慢消费者：处理这 1 条很久 -> 没发 ACK -> MQ 不给新的 -> 慢慢干
+        #    最终：任务自动流向了处理能力更强的节点。
+```
+
+> **生产经验小贴士**： 
+>
+> - 虽然 `prefetch: 1` 能保证绝对的公平，但也会频繁触发网络交互（每处理一条都要问 MQ 要一条）。
+>
+>   如果业务吞吐量极高且每条消息处理极快（毫秒级），可以适当调大这个值（例如 10 或 50），在“公平”和“性能”之间寻找平衡
+>
+>   但在 **工作队列** 的学习阶段，我们统一设为 **1**
+>
+> > 并不是 RabbitMQ 可以在“轮询”和“公平”这两种模式之间切换开关，而是因为 Spring Boot 默认给的 Prefetch Count 太大了（250），导致大家都拼命往自己那里囤积消息，结果就变成了轮询的效果
+
+
+
+##### D. 代码实战
+
+我们模拟一个标准的“工作队列”场景：发送 10 条消息，让两个处理速度不同的消费者去争抢
+
+**A. 消费者 (模拟能力差异)**
+
+使用 `queuesToDeclare` 属性，让 Spring 自动创建队列。
+
+```java
+import org.springframework.amqp.rabbit.annotation.Queue;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.stereotype.Component;
+
+@Component
+public class WorkConsumer {
+
+    // 消费者 1：处理很慢 (模拟沉重业务)
+    // queuesToDeclare: 如果队列不存在，自动创建
+    @RabbitListener(queuesToDeclare = @Queue("work.q"))
+    public void worker1(String msg) throws InterruptedException {
+        System.out.println("🐢 慢消费者 收到: " + msg + " [" + java.time.LocalTime.now() + "]");
+        Thread.sleep(1000); // 模拟耗时 1秒
+    }
+
+    // 消费者 2：处理很快
+    @RabbitListener(queuesToDeclare = @Queue("work.q"))
+    public void worker2(String msg) throws InterruptedException {
+        System.out.println("🐇 快消费者 收到: " + msg + " [" + java.time.LocalTime.now() + "]");
+        Thread.sleep(100); // 模拟耗时 0.1秒
+    }
+}
+```
+
+**B. 生产者 (利用 Default Exchange)**
+
+```java
+@Autowired
+private RabbitTemplate rabbitTemplate;
+
+public void sendWork() {
+    String queueName = "work.q";
+    // 循环发送 10 条任务
+    for (int i = 1; i <= 10; i++) {
+        String msg = "任务-" + i;
+        
+        // 【关键细节】
+        // 这里只传了 queueName，没有传交换机 name。
+        // 实际上是发送给了默认交换机(AMQP default)，RoutingKey = "work.q"
+        rabbitTemplate.convertAndSend(queueName, msg);
+        
+        System.out.println("已发送: " + msg);
+    }
+}
+```
+
+**C. 预期结果验证**
+
+- **如果不配 `prefetch: 1`**：
+  - 任务被 **平均分配** (1,3,5 给慢的; 2,4,6 给快的)
+  - **现象**：快消费者早就干完活休息了，慢消费者还在哼哧哼哧地干，整体耗时取决于最慢的那个
+- **配置了 `prefetch: 1`**：
+  - **现象**：快消费者处理了绝大多数消息 (例如处理了 8 条)，慢消费者只处理了 2 条
+  - **结论**：系统整体效率极高，没有空闲资源
+
+
+
+#### C. 发布订阅模型 (Fanout Exchange)
+
+**场景**：我们需要实现“一条消息被多个消费者同时收到”。例如：用户注册成功后，既要发短信，又要发邮件，还要送积分
+
+**拓扑结构**：`P -> Exchange (Fanout) -> Queue A, Queue B -> Consumers`
+
+##### a. 模型颠覆：引入交换机 (Exchange)
+
+在之前的“工作队列”中，生产者直接把消息发给队列（其实是发给默认交换机）。而在发布订阅模型中，生产者和消费者之间增加了一个 **中间层** —— **交换机 (Exchange)**
+
+- **生产者 (P)**：只负责把消息扔给交换机，**完全不知道** 消息最终会去哪个队列
+- **交换机 (X)**：负责接收消息，并根据规则（Fanout 规则是无脑复制）把消息推送到绑定的队列
+- **队列 (Q)**：接收来自交换机的消息
+
+**Fanout 的规则**：**“我全都要”**。 它会忽略 RoutingKey，将收到的所有消息 **复制 (Copy)** 多份，转发给 **所有** 绑定到该交换机的队列
+
+
+
+##### b. 新概念：临时队列 (Temporary Queue)
+
+在广播模式下（例如实时日志监控），我们通常面临两个特殊需求：
+
+1. **即时性**：消费者只关心启动后产生的新消息，不关心启动前的历史消息
+2. **独立性**：每个消费者都需要一个属于自己的队列，用来接收完整的消息副本
+
+
+
+**解决方案**：使用 **临时队列 (Anonymous/Temporary Queue)**
+
+- **特性**：
+  1. **随机命名**：队列名由 RabbitMQ 自动生成（如 `amq.gen-JzTY2...`），避免命名冲突
+  2. **非持久化**：通常存在内存中，速度快
+  3. **排他性**：只能被当前连接访问
+  4. **自动删除**：**关键特性！** 当消费者断开连接（Ctrl+C）时，这个队列会自动被 RabbitMQ 删除
+
+> **Spring Boot 差异对比**：
+>
+> - **原生 API**：需要手动调用 `String qName = channel.queueDeclare().getQueue()`
+> - **Spring AMQP**：在注解中声明 `@Queue` 时，如果不指定 `name`，Spring 就会自动创建一个临时队列。我们将在下一节代码中演示
+
+
+
+##### c. 代码实战
+
+**A. 消费者 (模拟两个独立的日志系统)**
+
+我们要实现的效果：一个交换机，后面挂两个 **临时队列**
+
+```java
+import org.springframework.amqp.core.ExchangeTypes;
+import org.springframework.amqp.rabbit.annotation.*;
+import org.springframework.stereotype.Component;
+
+@Component
+public class FanoutConsumer {
+
+    // === 消费者 1：控制台打印服务 ===
+    @RabbitListener(bindings = @QueueBinding(
+        // 1. 声明队列：
+        //    不指定 name 属性 -> Spring 自动创建临时队列 (随机名 + 排他 + 自动删除)
+        value = @Queue, 
+        
+        // 2. 声明交换机：
+        //    指定名字和类型 (Fanout)
+        exchange = @Exchange(name = "logs.fanout", type = ExchangeTypes.FANOUT)
+    ))
+    public void receive1(String msg) {
+        System.out.println("【控制台】打印日志: " + msg);
+    }
+
+    // === 消费者 2：文件存储服务 ===
+    @RabbitListener(bindings = @QueueBinding(
+        // 这里的 value = @Queue 也是创建一个新的、独立的临时队列
+        // 两个消费者拥有独立的队列，所以都能收到完整的消息副本
+        value = @Queue,
+        exchange = @Exchange(name = "logs.fanout", type = ExchangeTypes.FANOUT)
+    ))
+    public void receive2(String msg) {
+        System.out.println("【文件系统】写入日志: " + msg);
+    }
+}
+```
+
+
+
+**B. 生产者 (广播消息)**
+
+发送端只需要指定发给哪个“大喇叭”（交换机）即可
+
+```java
+@Autowired
+private RabbitTemplate rabbitTemplate;
+
+public void sendFanout() {
+    String exchangeName = "logs.fanout";
+    String msg = "System Error: OOM detected!";
+
+    // 【关键细节】
+    // 参数1: 交换机名称
+    // 参数2: RoutingKey (Fanout 模式下填空字符串 ""，因为填了也没用)
+    // 参数3: 消息内容
+    rabbitTemplate.convertAndSend(exchangeName, "", msg);
+    
+    System.out.println("广播消息已发出: " + msg);
+}
+```
+
+
+
+**C. 验证结果**
+
+启动程序，调用发送方法。你会发现两个消费者 **同时** 收到了消息
+
+- 如果停止消费者（Ctrl+C），去 RabbitMQ 控制台看，你会发现那两个随机名字的队列 **自动消失** 了。这就是临时队列的魅力
+
+
+
+#### D. 路由模型 (Direct Exchange)
+
+**场景**：我们需要根据消息的“类型”或“级别”进行分发。 例如：日志系统
+
+- 我们希望将 **ERROR** 级别的日志写入磁盘文件（需要持久化）
+- 但我们希望将 **ALL** (Error + Info + Warning) 级别的日志都在控制台打印出来
+- 如果使用 Fanout，控制台和文件都会收到所有日志，这既浪费磁盘空间，又不符合需求
+
+**拓扑结构**：`P -> Exchange (Direct) -> Queue A (绑定key: error), Queue B (绑定key: info, error...)`
+
+
+
+##### a. 核心机制：精确匹配
+
+Direct Exchange 的路由算法非常简单粗暴：**“完全相等”**
+
+- **发送方**：在发送消息时，必须指定一个 **RoutingKey**（比如 "error"）
+- **交换机**：检查每一个绑定的队列
+- **规则**：如果队列绑定的 **BindingKey** 刚好等于 "error"，就转发进去；否则就忽略
+
+
+
+##### b. 关键特性：多重绑定
+
+这是 Direct 模式最灵活的地方。它允许灵活的拓扑组合：
+
+1. **一对多 (像广播)**：
+   - 如果不希望过滤，可以让多个队列都绑定同一个 Key (例如都绑定 "update")
+   - 此时发一条 "update" 消息，这些队列都能收到
+2. **多对一 (像收集器)**：
+   - 一个队列可以绑定 **多个不同的 Key**
+   - 例如：控制台队列希望接收所有日志，它可以分别绑定 "info"、"warning"、"error"
+   - 这样，无论发来的是哪种级别的日志，它都能照单全收
+
+
+
+##### c. 代码实战：精准投递与多重绑定
+
+我们模拟日志分发场景：
+
+1. **磁盘写入器**：只关心 `error` 级别的日志（精准匹配）
+2. **控制台打印器**：关心 `info`, `warning`, `error` 所有级别的日志（多重绑定）
+
+**A. 消费者 (定义拓扑)**
+
+注意观察 `key` 属性的写法
+
+```java
+import org.springframework.amqp.core.ExchangeTypes;
+import org.springframework.amqp.rabbit.annotation.*;
+import org.springframework.stereotype.Component;
+
+@Component
+public class DirectConsumer {
+
+    // === 消费者 1：磁盘写入器 ===
+    @RabbitListener(bindings = @QueueBinding(
+        value = @Queue(name = "disk.q"), // 自动创建名为 disk.q 的队列
+        exchange = @Exchange(name = "logs.direct", type = ExchangeTypes.DIRECT),
+        key = {"error"} // 【精准匹配】只接收 routingKey = "error" 的消息
+    ))
+    public void logToDisk(String msg) {
+        System.out.println("💾【磁盘】写入 Error 日志: " + msg);
+    }
+
+    // === 消费者 2：控制台打印器 ===
+    @RabbitListener(bindings = @QueueBinding(
+        value = @Queue(name = "console.q"), 
+        exchange = @Exchange(name = "logs.direct", type = ExchangeTypes.DIRECT),
+        // 【多重绑定】关键点！
+        // 一个队列绑定了 3 个 Key，意味着这 3 种消息它都能收到
+        key = {"info", "warning", "error"} 
+    ))
+    public void logToConsole(String msg) {
+        System.out.println("📺【控制台】打印日志: " + msg);
+    }
+}
+```
+
+
+
+**B. 生产者 (发送不同级别)**
+
+发送时，第二个参数 `RoutingKey` 决定了消息的去向
+
+```java
+@Autowired
+private RabbitTemplate rabbitTemplate;
+
+public void sendDirect() {
+    String exchange = "logs.direct";
+
+    // 场景 1：发送 Info 日志
+    // 路由结果：只有【控制台】能收到
+    rabbitTemplate.convertAndSend(exchange, "info", "普通信息：系统启动中...");
+
+    // 场景 2：发送 Error 日志
+    // 路由结果：【磁盘】和【控制台】都能收到 (因为它们都绑定了 error)
+    rabbitTemplate.convertAndSend(exchange, "error", "严重错误：数据库连接超时！");
+    
+    // 场景 3：发送 Debug 日志 (未绑定)
+    // 路由结果：没有队列绑定 "debug"，消息被直接丢弃 (Lost)
+    rabbitTemplate.convertAndSend(exchange, "debug", "调试信息：变量A=1");
+}
+```
+
+**C. 避坑指南**
+
+1. **Direct 是完全匹配**： 如果你发送的 Key 是 `error.db`，它 **不等于** `error`。 Direct 模式不具备任何模糊匹配能力。如果你想匹配 `error` 开头的所有消息，请看下一节的 Topic 模式
+2. **无匹配即丢弃**： 如代码演示的场景 3，如果没有任何队列绑定了 `debug`，这条消息发给交换机后，会因为找不到路而被 **直接丢弃**，MQ 不会报错也不会暂存
+
+
+
+#### E. 主题模型 (Topic Exchange)
+
+**场景**：
+
+- 之前的 Direct 模式虽然能区分 `error` 和 `info`，但如果我们想实现更复杂的逻辑呢？
+- 例如：**“我只想要所有模块的 error 日志”** 或者 **“我只想要用户模块的所有日志”**
+- 这时 Direct 的精准匹配就无能为力了，我们需要 **Topic** 模式的通配符能力
+
+**拓扑结构**：`P -> Exchange (Topic) -> Queue (绑定通配符 Key)`
+
+
+
+##### a. 核心规则：点分字符串
+
+在 Topic 模式下，Routing Key 不能随意写，必须满足特定格式：
+
+- 必须是 **由点号 (.) 分隔的单词列表**。
+- 推荐格式：`<业务域>.<对象>.<动作>`
+- 例如：`user.login.success`、`order.pay.failed`、`sys.cron.1min`
+
+
+
+##### b. 通配符：星号 vs 井号
+
+Binding Key 支持两个特殊字符，请务必记清它们的区别：
+
+| 符号            | 含义                     | 记忆口诀     | 例子                                                         |
+| --------------- | ------------------------ | ------------ | ------------------------------------------------------------ |
+| **`\*` (星号)** | 匹配 **正好一个** 单词   | **“一个坑”** | `*.error` 能匹配 `user.error`，但 **不能** 匹配 `user.login.error` |
+| **`#` (井号)**  | 匹配 **零个或多个** 单词 | **“无底洞”** | `user.#` 能匹配 `user.login`，也能匹配 `user.login.success`  |
+
+
+
+##### c. 经典算法
+
+假设消息的 Routing Key 是 **`quick.orange.rabbit`**，我们来看看它能匹配哪些 Binding Key：
+
+| Binding Key                | 结果     | 原因分析                                                     |
+| -------------------------- | -------- | ------------------------------------------------------------ |
+| `quick.orange.rabbit`      | ✅ 匹配   | 完全匹配 (此时退化为 Direct)                                 |
+| `*.orange.*`               | ✅ 匹配   | 中间是 orange，前后各占 **一个** 单词                        |
+| `*.*.rabbit`               | ✅ 匹配   | 最后一个词是 rabbit，前面占 **两个** 单词                    |
+| `quick.#`                  | ✅ 匹配   | quick 开头，后面 **无视** 单词数量                           |
+| `#.rabbit`                 | ✅ 匹配   | rabbit 结尾，前面 **无视** 单词数量                          |
+| `quick.orange.male.rabbit` | ❌ 不匹配 | `*.orange.*` 无法匹配，因为 `*` 只能匹配 1 个词，这里多了 `male` |
+
+> **总结**：
+>
+> - 只有 `#` 才是真正的“模糊匹配”
+> - 如果 Binding Key 是 `#`，这其实就变成了 **Fanout**（接收所有）
+> - 如果 Binding Key 不含任何通配符，这就变成了 **Direct**
+
+
+
+### 3. [补充] 两种监听方式对比
+
+对于消息，发送的时候，我们用的都是 `RabbitTemplate`，监听或接收的时候，我们有两种方式，分别是“注解”和“Bean”
+
+- 在前面的章节中，为了演示方便，我们大量使用了 `@RabbitListener(bindings = ...)` 这种注解方式
+
+  但在实际工作中，你还会经常见到另一种写法：**配置类 (@Bean) 方式**
+
+我们需要了解两者的区别，以便在不同场景下做出正确选择
+
+#### A. 方式一：注解声明
+
+- **写法**：直接在消费者监听器上写 `@QueueBinding`
+- **特点**：**“我需要什么，我就自己建什么”**
+- **优点**：
+  - **直观**：消费者代码和拓扑结构在一起，一眼就能看出数据流向
+  - **敏捷**：开发速度快，适合微服务架构，消费者对自己的队列有绝对控制权
+- **缺点**：
+  - 配置分散在各个 Java 类中，难以全局视图化管理
+
+
+
+#### B. 方式二：配置类声明
+
+- **写法**：创建一个单独的 `@Configuration` 类，利用 `@Bean` 注册 Queue, Exchange 和 Binding
+- **特点**：**“统一规划，集中管理”**
+- **优点**：
+  - **规范**：所有的队列、交换机定义都在一个文件里，方便运维人员审查和管理
+  - **复用**：如果多个消费者需要监听同一个队列，不需要重复声明
+
+**代码实战 (标准模版)：**
+
+```java
+import org.springframework.amqp.core.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class RabbitConfig {
+
+    // 1. 定义队列
+    @Bean
+    public Queue orderQueue() {
+        // durable: true (持久化)
+        return new Queue("order.q", true);
+    }
+
+    // 2. 定义交换机
+    @Bean
+    public DirectExchange orderExchange() {
+        return new DirectExchange("order.direct");
+    }
+
+    // 3. 定义绑定关系
+    @Bean
+    public Binding orderBinding() {
+        return BindingBuilder.bind(orderQueue())
+                .to(orderExchange())
+                .with("order.create");
+    }
+}
+```
+
+**消费者配合写法：**
+
+如果使用了配置类声明，消费者只需要引用队列名即可：
+
+```java
+@Component
+public class OrderConsumer {
+    // 只需要指定队列名，不需要再写 bindings
+    @RabbitListener(queues = "order.q")
+    public void listen(String msg) {
+        System.out.println("收到订单: " + msg);
+    }
+}
+```
+
+#### C. 选型建议
+
+- **小型/敏捷项目**：推荐 **注解方式**。开发效率第一，代码量少
+- **大型/规范项目**：推荐 **配置类方式**。特别是当队列数量庞大，或者需要严格规范命名时，集中管理更安全
+
+
+
+### 4. RabbitMQ 补充知识：ACK 机制
 
 #### 为什么需要学 ACK？
 
@@ -2887,9 +2486,9 @@ public class TopicListener {
 
 
 
-## 四：消息可靠性保障
+## 三：消息可靠性保障
 
-### 4.1 保证消息不丢失
+### 3.1 保证消息不丢失
 
 #### 1. 全局概览
 
@@ -3795,7 +3394,7 @@ RabbitMQ 对这个特性的处理一直在进化，这是一个容易混淆的�
 
 
 
-### 4.2 死信队列
+### 3.2 死信队列
 
 > Dead Letter Exchange
 
@@ -4015,7 +3614,7 @@ public class BizConsumer {
 
 
 
-### 4.3 延迟队列
+### 3.3 延迟队列
 
 #### 1. 为什么需要延迟队列？
 
@@ -4240,7 +3839,7 @@ RabbitMQ 的原生队列是一个严格的 FIFO (先进先出) 数据结构。**
 
 
 
-### 4.4 进阶方案：DelayExchange 插件
+### 3.4 进阶方案：DelayExchange 插件
 
 #### 1. 它是谁？
 
@@ -4409,9 +4008,9 @@ public void testDelayMsg() {
 
 
 
-## 五：高级业务场景与分布式难题
+## 四：高级业务场景与分布式难题
 
-### 5.1 消息积压与紧急扩容
+### 4.1 消息积压与紧急扩容
 
 #### 1. 事故现场：如何判断积压？
 
