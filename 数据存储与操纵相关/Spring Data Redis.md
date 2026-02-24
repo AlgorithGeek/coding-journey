@@ -377,11 +377,13 @@ spring:
 
 ### 1. 三种方案对比
 
-| 方案                     | Key类型 | Value类型 | 可读性       | 跨语言   | 性能   | 推荐度   |
-| ------------------------ | ------- | --------- | ------------ | -------- | ------ | -------- |
-| **默认 RedisTemplate**   | Object  | Object    | ❌ 二进制乱码 | ❌ 仅Java | ⚠️ 一般 | ⭐ 不推荐 |
-| **StringRedisTemplate**  | String  | String    | ✅ 纯文本     | ✅ 通用   | ✅ 高   | ⭐⭐⭐⭐     |
-| **自定义 RedisTemplate** | String  | Object    | ✅ JSON格式   | ✅ 通用   | ✅ 高   | ⭐⭐⭐⭐⭐    |
+| **方案**                 | **Key序列化** | **Value序列化** | **支持的Redis结构**      | **可读性** | 性能   | **推荐度**   |
+| ------------------------ | ------------- | --------------- | ------------------------ | ---------- | ------ | ------------ |
+| **默认 RedisTemplate**   | Jdk           | Jdk             | 全支持                   | ❌ 乱码     | ⚠️ 一般 | ⭐ **不推荐** |
+| **StringRedisTemplate**  | String        | String          | **全支持 (Hash/List等)** | ✅ 纯文本   | ✅ 高   | ⭐⭐⭐⭐         |
+| **自定义 RedisTemplate** | String        | JSON            | 全支持                   | ✅ JSON     | ✅ 高   | ⭐⭐⭐⭐⭐        |
+
+> **注：** `StringRedisTemplate` 的 Value 类型为 String，指的是 **传入 Java 方法的数据** 必须是 String，但存入 Redis 时依然可以使用 List、Hash 等复杂结构
 
 
 
@@ -457,19 +459,22 @@ Spring Boot 自动配置的这个`RedisTemplate<Object, Object>` 默认使用序
 >✅ 适合简单场景
 
 - **`RedisTemplate` 的特化子类**：
-  - **`StringRedisTemplate`** 继承自 `RedisTemplate`。可以把它看作是 `RedisTemplate<String, String>` 的一个便捷实现
-    - **专为字符串设计**：它专门用于处理 Key 和 Value **均为纯字符串**的场景
+  - **`StringRedisTemplate`** 继承自 `RedisTemplate`
+  - **设计初衷**：它预设了 Key 和 Value 的序列化器均为 `StringRedisSerializer`
 
 
 
 #### 4.1 核心特点
 
-- 本质：`RedisTemplate<String, String>` 的便捷实现
+- **序列化策略**：Key 和 Value 都会被当作 **字符串** 处理
 - 序列化器：固定使用 `StringRedisSerializer`
 - 存储格式：UTF-8 编码的纯文本字符串
 - **工作方式**: 
   - **序列化 (Java -> Redis)**：它使用指定的字符集（默认为 UTF-8）将 Java 的 `String` 对象转换为字节数组
   - **反序列化 (Redis -> Java)**：它使用相同的字符集将从 Redis 读取的字节数组转回 Java `String` 对象
+- **⭐ 核心误区纠正：** 很多人误以为 `StringRedisTemplate` 只能操作 Redis 的 String（字符串）类型。 **这是错误的！**
+  - 它 **支持 Redis 的所有数据类型**（Hash, List, Set, ZSet）
+  - **区别在于**：它要求你存入 List 或 Hash 等 **容器中** 的 **具体元素内容** 必须是字符串（String）
 
 
 
@@ -479,9 +484,10 @@ Spring Boot 自动配置的这个`RedisTemplate<Object, Object>` 默认使用序
 ##### 优点
 
 1. **可读性极高**：
-   - 存入 Redis 的数据就是 UTF-8 编码的纯文本字符串。你可以直接在 `redis-cli` 中使用 `GET my:key` 来查看数据，非常利于调试
+   - 存入 Redis 的数据就是 UTF-8 编码的纯文本字符串。你可以直接在 `redis-cli` 中查看到明文数据，非常利于调试
 2. **跨语言通用**：任何编程语言（Python, Node.js, PHP）都可以轻松读写 UTF-8 字符串，实现了完美的跨平台兼容
-3. **安全且高效**：没有 Java 序列化漏洞，且字符串转换的性能很高
+3. **零配置**：Spring Boot 默认提供，开箱即用
+4. **安全且高效**：没有 Java 序列化漏洞，且字符串转换的性能很高
 
 
 
@@ -489,7 +495,9 @@ Spring Boot 自动配置的这个`RedisTemplate<Object, Object>` 默认使用序
 
 `StringRedisTemplate` 的局限性在于它 **无法自动** 处理 Java 非字符串对象（POJO）与字符串（特别是 JSON）之间的转换
 
-- 它只负责传输纯字符串，对象的序列化/反序列化需要你自己手动完成，这会增加业务代码的复杂度
+- 它**不仅限于 String 结构，但仅限于 String 内容**：
+  - 如果要存一个 `User` 对象到 List 中，你必须先手动把 User 转成 JSON 字符串
+  - 相比 `自定义 RedisTemplate`，多了一步手动序列化的代码
 
 
 
@@ -553,6 +561,28 @@ User user = objectMapper.readValue(json, User.class);
 
 > GET user:1
 "{\"name\":\"Alice\",\"age\":25}"  # 可读的JSON！
+```
+
+
+
+**场景3：使用 StringRedisTemplate 操作复杂结构（Hash/List）**
+
+```java
+@Autowired
+private StringRedisTemplate stringRedisTemplate;
+
+public void complexStructureTest() {
+    // 1. 操作 Hash (存对象属性，所有值必须转为 String)
+    stringRedisTemplate.opsForHash().put("user:1001", "name", "ZhangSan");
+    stringRedisTemplate.opsForHash().put("user:1001", "age", "25"); // 数字也要转 String
+    
+    // 2. 操作 List (做消息队列)
+    stringRedisTemplate.opsForList().leftPush("task:queue", "task_1");
+    stringRedisTemplate.opsForList().leftPush("task:queue", "task_2");
+    
+    // 3. 操作 Set (做标签)
+    stringRedisTemplate.opsForSet().add("product:tags:1", "hot", "sale");
+}
 ```
 
 

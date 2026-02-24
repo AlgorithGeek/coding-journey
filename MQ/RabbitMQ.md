@@ -115,7 +115,7 @@
 
 
 
-### 1.2 RabbitMQ 核心架构
+### 1.2 RabbitMQ 核心架构⭐
 
 RabbitMQ 是 **AMQP (Advanced Message Queuing Protocol)** 协议的一个开源实现。要理解 RabbitMQ，本质上就是要理解 AMQP 的模型
 
@@ -838,7 +838,7 @@ public class RabbitConfig {
 
 #### D. 发送神器：`RabbitTemplate`
 
-`RabbitTemplate` 是 Spring AMQP 提供的核心发送工具，它是 **线程安全** 的，因此你可以在 Service 中放心注入并单例使用
+`RabbitTemplate` 是 Spring AMQP 提供的核心 **发送工具** ，它是 **线程安全** 的，因此你可以在 Service 中放心注入并单例使用
 
 它最大的贡献是将底层复杂的 `basicPublish` 方法封装成了人性化的 `convertAndSend`
 
@@ -988,57 +988,63 @@ public class OrderService {
 
 这是一个 **“懒人神器”**。它和 `queues` 参数是 **二选一** 的关系
 
-###### **核心区别**
+- **核心区别**
 
-- **`queues`**：**“只负责监听”**
+  - **`queues`**：**“只负责监听”**
 
-  - 前提：队列必须 **已经存在** 于 RabbitMQ 中（或者你已经在 `@Configuration` 类里定义了 `@Bean`）
-  - 如果队列不存在，启动报错
+    - 前提：队列必须 **已经存在** 于 RabbitMQ 中（或者你已经在 `@Configuration` 类里定义了 `@Bean`）
+    - 如果队列不存在，启动报错
 
-  
-
-- **`bindings`**：**“连建带连再监听” (三合一)**
-
-  - 前提：**不依赖** 任何前置配置
-  - 效果：容器启动时，Spring 会自动去 MQ 检查：
-    1. 队列有吗？没有我给你建
-    2. 交换机有吗？没有我给你建
-    3. 绑定关系有吗？没有我给你绑
-    4. 最后开始监听
+    
 
 
+  - **`bindings`**：**“连建带连再监听” (三合一)**
+    - 前提：**不依赖** 任何前置配置
+    - 效果：容器启动时，Spring 会自动去 MQ 检查：
+      1. 队列有吗？没有我给你建
+      2. 交换机有吗？没有我给你建
+      3. 绑定关系有吗？没有我给你绑
+      4. 最后开始监听
 
-###### **属性全解 (API 速查)**
 
-`@QueueBinding` 注解本身包含三个核心属性，分别对应 AMQP 的三大组件：
 
-1. **`value` (目标队列)**
 
-   - **类型**: `@Queue`
-   - **作用**: 定义要监听的队列
-   - **常用内部属性**:
-     - `name`: 队列名称。如果留空 `""`，MQ 会生成一个随机名称（通常用于临时队列）
-     - `durable`: 是否持久化 (默认 `true`)。重启后队列是否还在
-     - `autoDelete`: 是否自动删除 (默认 `false`)。没有消费者连接时是否删除
-     - `exclusive`: 是否排他 (默认 `false`)
+- ###### **属性全解 (API 速查)**
 
-2. **`exchange` (源头交换机)**
+  - `@QueueBinding` 注解本身包含三个核心属性，分别对应 AMQP 的三大组件：
 
-   - **类型**: `@Exchange`
-   - **作用**: 定义消息来源的交换机
-   - **常用内部属性**:
-     - `name`: 交换机名称
-     - `type`: 交换机类型。推荐使用常量 `ExchangeTypes.DIRECT`, `TOPIC`, `FANOUT`
-     - `delayed`: 是否支持延迟消息 (默认 `false`)。需要安装插件才生效
-     - `ignoreDeclarationExceptions`: 是否忽略声明异常 (默认 `false`)。如果交换机已存在且属性不一致，设为 `true` 可防止启动报错
+    1. **`value` (目标队列)**
 
-3. **`key` (路由规则)**
+       - **类型**: `@Queue`
+       - **作用**: 定义要监听的队列
+       - **常用内部属性**:
+         - `name`: 队列名称。如果留空 `""`，MQ 会生成一个随机名称（通常用于临时队列）
+         - `durable`: 是否持久化 (默认 `true`)。重启后队列是否还在
+         - `autoDelete`: 是否自动删除 (默认 `false`)。没有消费者连接时是否删除
+         - `exclusive`: 是否排他 (默认 `false`)
 
-   - **类型**: `String[]` (字符串数组)
-   - **作用**: 定义 Binding Key
-   - **说明**: 支持绑定多个 Key。例如 `key = {"red", "blue"}` 表示只要是红色或蓝色的消息都接收
+       
 
-   
+    2. **`exchange` (源头交换机)**
+
+       - **类型**: `@Exchange`
+       - **作用**: 定义消息来源的交换机
+       - **常用内部属性**:
+         - `name`: 交换机名称
+         - `type`: 交换机类型。推荐使用常量 `ExchangeTypes.DIRECT`, `ExchangeTypes.TOPIC`, `ExchangeTypes.FANOUT`
+         - `delayed`: 是否支持延迟消息 (默认 `false`)。需要安装插件才生效
+         - `ignoreDeclarationExceptions`: 是否忽略声明异常 (默认 `false`)。如果交换机已存在且属性不一致，设为 `true` 可防止启动报错
+
+       
+
+    3. **`key` (路由规则)**
+
+       - **类型**: `String[]` (字符串数组)
+       - **作用**: 定义 **Binding Key**
+       - **说明**: 支持绑定多个 Key。例如 `key = {"red", "blue"}` 表示只要是红色或蓝色的消息都接收
+
+       
+
 
 ###### **使用建议**
 
@@ -1231,7 +1237,7 @@ public void handle(User user) {
 
 
 
-### 1. 交换机与 Bean声明
+### 1. 交换机与 Bean 声明
 
 #### A Direct Exchange (直连交换机)
 

@@ -1762,4 +1762,3 @@ config.setWriterFeatures(
      - ✅ `JSON.parseObject(json, User.class)`
      - ❌ `JSON.parseObject(json, Object.class)`
 
-
