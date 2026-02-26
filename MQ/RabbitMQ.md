@@ -1053,38 +1053,50 @@ public class OrderService {
 
   - `bindings` 属性需要接收一个结构化的嵌套注解：**`@QueueBinding`**（或者它的数组），来指定“队列”，“交换机”，以及“Binding Key”等
 
-  - **注解属性**
+  - **`@QueueBinding`注解内部属性：**
 
-    - **`value` (目标队列 `@Queue`)**
-      - `name`: 队列名称。如果留空 `""`，MQ 会自动生成一个随机名（通常用于临时队列，比如广播模式下的专属队列）
+    - **`value` (目标队列.参数类型: `@Queue`)**
+      
+      - **`@Queue`注解内部属性:**
+      
+        - `name`: 队列名称。如果留空 `""`，MQ 会自动生成一个随机名（通常用于临时队列，比如广播模式下的专属队列）
+      
 
-      - `durable`: 重启后队列是否存活（默认 `true`，持久化）
+        - `durable`: 重启后队列是否存活（默认 `true`，持久化）
 
-      - `autoDelete`: 没有消费者连接时是否自动删除（默认 `false`）
+      
+        - `autoDelete`: 没有消费者连接时是否自动删除（默认 `false`）
+      
+      
+        - `exclusive`: 是否为排他队列（默认 `false`）
+      
+             
+      
+    - **`exchange` (源头交换机.参数类型: `@Exchange`)**
+  
+        - **`@Exchange`注解内部属性:**
+  
+          - `name`: 交换机名称
+  
+          - `type`: 交换机类型
+            - 推荐使用 Spring 内置常量，如 `ExchangeTypes.DIRECT`, `ExchangeTypes.TOPIC`, `ExchangeTypes.FANOUT`
 
-      - `exclusive`: 是否为排他队列（默认 `false`）
+          - `delayed`: 是否支持延迟消息（默认 `false`。⚠️**注意：需 MQ 服务端安装了延迟插件才生效**）
 
-           
-
-    - **`exchange` (源头交换机 `@Exchange`)**
-
-        - `name`: 交换机名称
-        - `type`: 交换机类型
-          - 推荐使用 Spring 内置常量，如 `ExchangeTypes.DIRECT`, `ExchangeTypes.TOPIC`, `ExchangeTypes.FANOUT`
-        - `delayed`: 是否支持延迟消息（默认 `false`。⚠️**注意：需 MQ 服务端安装了延迟插件才生效**）
-        - `ignoreDeclarationExceptions`: 是否忽略声明异常（默认 `false`）
-          - 如果交换机已存在但属性（比如 durable）与代码不一致，设为 `true` 可防止项目启动报错
-
+          - `ignoreDeclarationExceptions`: 是否忽略声明异常（默认 `false`）
+            - 如果交换机已存在但属性（比如 durable）与代码不一致，设为 `true` 可防止项目启动报错
+  
+  
         
-
-    - **`key` (路由规则 `String[]`)**
-
+  
+    - **`key` (路由规则.参数类型: `String[]`)**
+  
         - 定义 **Binding Key** (路由键)。支持数组，可同时绑定多个路由规则。例如 `key = {"red", "blue"}` 表示只要是红色或蓝色的消息都接收
-
+  
         
-
+  
   - **示例：**
-
+  
     ```java
     // 1. 自动创建持久化队列 "direct.queue1"
     // 2. 自动创建交换机 "hmall.direct" (直连型)
@@ -1409,7 +1421,94 @@ Spring AMQP 底层非常智能，它会利用 **反射机制** 检查 `@RabbitLi
 
 
 
-### 1. 交换机与 Bean 声明
+### 1. 交换机、队列及绑定关系的两种定义方式
+
+对于消息，发送的时候，我们用的都是 `RabbitTemplate`，监听或接收的时候，我们会接触交换机、队列、绑定关系。我们有两种方式来定义他们，分别是前文中使用的“注解”方式和“Bean注册(配置类声明)”的方式
+
+- 在前面的章节中，为了演示方便，我们大量使用了 `@RabbitListener(bindings = ...)` 这种注解方式
+
+  但在实际工作中，你还会经常见到另一种写法：**配置类 (@Bean) 方式**
+
+我们需要了解两者的区别，以便在不同场景下做出正确选择
+
+#### A. 方式一：注解声明
+
+- **写法**：直接在消费者监听器上写 `@QueueBinding`
+- **特点**：**“我需要什么，我就自己建什么”**
+- **优点**：
+  - **直观**：消费者代码和拓扑结构在一起，一眼就能看出数据流向
+  - **敏捷**：开发速度快，适合微服务架构，消费者对自己的队列有绝对控制权
+- **缺点**：
+  - 配置分散在各个 Java 类中，难以全局视图化管理
+
+
+
+#### B. 方式二：配置类声明
+
+- **写法**：创建一个单独的 `@Configuration` 类，利用 `@Bean` 注册 Queue, Exchange 和 Binding
+- **特点**：**“统一规划，集中管理”**
+- **优点**：
+  - **规范**：所有的队列、交换机定义都在一个文件里，方便运维人员审查和管理
+  - **复用**：如果多个消费者需要监听同一个队列，不需要重复声明
+
+**代码实战 (标准模版)：**
+
+```java
+import org.springframework.amqp.core.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class RabbitConfig {
+
+    // 1. 定义队列
+    @Bean
+    public Queue orderQueue() {
+        // durable: true (持久化)
+        return new Queue("order.q", true);
+    }
+
+    // 2. 定义交换机
+    @Bean
+    public DirectExchange orderExchange() {
+        return new DirectExchange("order.direct");
+    }
+
+    // 3. 定义绑定关系
+    @Bean
+    public Binding orderBinding() {
+        return BindingBuilder.bind(orderQueue())
+                .to(orderExchange())
+                .with("order.create");
+    }
+}
+```
+
+**消费者配合写法：**
+
+如果使用了配置类声明，消费者只需要引用队列名即可：
+
+```java
+@Component
+public class OrderConsumer {
+    // 只需要指定队列名，不需要再写 bindings
+    @RabbitListener(queues = "order.q")
+    public void listen(String msg) {
+        System.out.println("收到订单: " + msg);
+    }
+}
+```
+
+#### C. 选型建议
+
+- **小型/敏捷项目**：推荐 **注解方式**。开发效率第一，代码量少
+- **大型/规范项目**：推荐 **配置类方式**。特别是当队列数量庞大，或者需要严格规范命名时，集中管理更安全
+
+
+
+
+
+### 2. 交换机与 Bean 声明
 
 #### A Direct Exchange (直连交换机)
 
@@ -1998,7 +2097,7 @@ public class TopicListener {
 
 
 
-### 2. 五大消息模型
+### 3. 五大消息模型
 
 #### A. 简单队列 (Simple Queue)
 
@@ -2499,89 +2598,6 @@ Binding Key 支持两个特殊字符，请务必记清它们的区别：
 > - 如果 Binding Key 不含任何通配符，这就变成了 **Direct**
 
 
-
-### 3. [补充] 两种监听方式对比
-
-对于消息，发送的时候，我们用的都是 `RabbitTemplate`，监听或接收的时候，我们有两种方式，分别是“注解”和“Bean”
-
-- 在前面的章节中，为了演示方便，我们大量使用了 `@RabbitListener(bindings = ...)` 这种注解方式
-
-  但在实际工作中，你还会经常见到另一种写法：**配置类 (@Bean) 方式**
-
-我们需要了解两者的区别，以便在不同场景下做出正确选择
-
-#### A. 方式一：注解声明
-
-- **写法**：直接在消费者监听器上写 `@QueueBinding`
-- **特点**：**“我需要什么，我就自己建什么”**
-- **优点**：
-  - **直观**：消费者代码和拓扑结构在一起，一眼就能看出数据流向
-  - **敏捷**：开发速度快，适合微服务架构，消费者对自己的队列有绝对控制权
-- **缺点**：
-  - 配置分散在各个 Java 类中，难以全局视图化管理
-
-
-
-#### B. 方式二：配置类声明
-
-- **写法**：创建一个单独的 `@Configuration` 类，利用 `@Bean` 注册 Queue, Exchange 和 Binding
-- **特点**：**“统一规划，集中管理”**
-- **优点**：
-  - **规范**：所有的队列、交换机定义都在一个文件里，方便运维人员审查和管理
-  - **复用**：如果多个消费者需要监听同一个队列，不需要重复声明
-
-**代码实战 (标准模版)：**
-
-```java
-import org.springframework.amqp.core.*;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-
-@Configuration
-public class RabbitConfig {
-
-    // 1. 定义队列
-    @Bean
-    public Queue orderQueue() {
-        // durable: true (持久化)
-        return new Queue("order.q", true);
-    }
-
-    // 2. 定义交换机
-    @Bean
-    public DirectExchange orderExchange() {
-        return new DirectExchange("order.direct");
-    }
-
-    // 3. 定义绑定关系
-    @Bean
-    public Binding orderBinding() {
-        return BindingBuilder.bind(orderQueue())
-                .to(orderExchange())
-                .with("order.create");
-    }
-}
-```
-
-**消费者配合写法：**
-
-如果使用了配置类声明，消费者只需要引用队列名即可：
-
-```java
-@Component
-public class OrderConsumer {
-    // 只需要指定队列名，不需要再写 bindings
-    @RabbitListener(queues = "order.q")
-    public void listen(String msg) {
-        System.out.println("收到订单: " + msg);
-    }
-}
-```
-
-#### C. 选型建议
-
-- **小型/敏捷项目**：推荐 **注解方式**。开发效率第一，代码量少
-- **大型/规范项目**：推荐 **配置类方式**。特别是当队列数量庞大，或者需要严格规范命名时，集中管理更安全
 
 
 
