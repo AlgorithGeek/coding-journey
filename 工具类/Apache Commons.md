@@ -30,7 +30,9 @@
 
 ##### 1. 判空与空白检查
 
-> **💡 核心差异提示**：与 Java 原生或 Spring 相比，Apache Commons 最大的优势在于提供了直接的反向方法（如 `isNotBlank`），避免了代码中出现繁琐且容易看漏的 `!isBlank()`。
+> **核心差异**：
+>
+> - 与 Java 原生或 Spring 相比，Apache Commons 最大的优势在于提供了直接的反向方法（如 `isNotBlank`），避免了代码中出现繁琐且容易看漏的 `!isBlank()`
 
 ###### `isBlank` / `isNotBlank`
 
